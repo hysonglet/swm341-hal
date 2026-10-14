@@ -19,23 +19,78 @@ pub(crate) mod hw {
     use super::Block;
     use cortex_m::asm::nop;
 
-    /// Power on the converter.
+    /// Power on and configure the converter.
     ///
-    /// The internal analog LDO (`CR2.ENLDO`) must be enabled and given a short
-    /// settle time *before* `CR.EN` is asserted, otherwise the converter never
-    /// finishes a conversion (its busy flag never rises and EOC never latches).
+    /// Mirrors the vendor `ADC_Init` + `ADC_Open` + `ADC_Calibrate` flow:
+    ///  1. reset the converter (CR.RESET pulse),
+    ///  2. clear the data FIFO (CR.FFCLR pulse),
+    ///  3. disable interrupts and clear all flags,
+    ///  4. power on the internal analog LDO and let it settle,
+    ///  5. assert CR.EN, then calibrate.
+    ///
+    /// Skipping the reset/calibration (or running the ADC clock at full speed)
+    /// leaves the SAR state machine unable to finish a conversion, so the EOC
+    /// flag never latches and a blocking read spins forever.
     pub(crate) fn enable(regs: &Block) {
+        // Select HRC / 8 as the ADC clock so the converter runs within spec
+        // (the reset default of AD0DIV = 0 would clock it at the full 150 MHz).
+        let sys = unsafe { &*crate::pac::SYS::ptr() };
+        sys.clksel
+            .modify(|_, w| unsafe { w.ad0().bits(0).ad0div().bits(3) });
+
+        // 1. Reset the digital core.
+        regs.cr.modify(|_, w| w.reset().set_bit());
+        for _ in 0..(120 * 20) {
+            nop();
+        }
+        regs.cr.modify(|_, w| w.reset().clear_bit());
+
+        // 2. Clear the conversion FIFO.
+        regs.cr.modify(|_, w| unsafe { w.ffclr().bits(0xF) });
+        regs.cr.modify(|_, w| unsafe { w.ffclr().bits(0) });
+
+        // 3. No averaging, no interrupts; clear every pending flag.
+        regs.cr.modify(|_, w| unsafe { w.avg().bits(0) });
+        regs.ie.write(|w| unsafe { w.bits(0) });
+        regs.if_.write(|w| unsafe { w.bits(0x3F3F3F3F) });
+
+        // 4. Power on the analog LDO and let it settle.
         regs.cr2.modify(|_, w| w.enldo().set_bit());
         for _ in 0..(64 * 20) {
             nop();
         }
+        // 5. Enable the converter, then calibrate it.
         regs.cr.modify(|_, w| w.en().set_bit());
+        calibrate(regs);
     }
 
     /// Select the trigger source for sequence 0 (`1` = software start via `GO`).
+    ///
+    /// Also arms a single conversion per start (`SEQCOV.seq0 = 0`).
     pub(crate) fn set_trigger(regs: &Block, src: u8) {
         regs.seqtrg
             .modify(|_, w| unsafe { w.seq0().bits(src) });
+        regs.seqcov.modify(|_, w| unsafe { w.seq0().bits(0) });
+    }
+
+    /// Run the one-time factory calibration required before the first conversion.
+    ///
+    /// The vendor driver calls this right after enabling the converter; without
+    /// it the SAR never settles and `EOC` never latches.
+    pub(crate) fn calibrate(regs: &Block) {
+        regs.calib.modify(|_, w| w.reset().set_bit());
+        for _ in 0..(120 * 20) {
+            nop();
+        }
+        regs.calib.modify(|_, w| w.start().set_bit());
+        for _ in 0..(120 * 10) {
+            nop();
+        }
+        regs.calib.modify(|_, w| w.start().clear_bit());
+        while regs.calib.read().busy().bit() {
+            nop();
+        }
+        regs.calib.modify(|_, w| w.load().set_bit());
     }
 
     /// True once sequence 0 has finished, read from the sequence status register
@@ -50,9 +105,12 @@ pub(crate) mod hw {
     }
 
     /// Route `channel` to the first slot of conversion sequence 0 (`SEQCHN0.SEQ0`).
+    ///
+    /// `SEQCHN0.SEQ0` is a *bitmask* of channels (bit `n` = channel `n`), not a
+    /// channel number, so channel `n` is selected by setting bit `n`.
     pub(crate) fn select_channel(regs: &Block, channel: u8) {
         regs.seqchn0
-            .modify(|_, w| unsafe { w.seq0().bits(channel as u16) });
+            .modify(|_, w| unsafe { w.seq0().bits(1u16 << channel) });
     }
 
     /// Kick off sequence 0 (`GO.SEQ0`).

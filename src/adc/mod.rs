@@ -5,17 +5,19 @@
 //! the end-of-conversion interrupt; otherwise [`Adc::read`] busy-waits.
 //!
 //! The type-checked analog pad roles (`ADCx_CHy`, plus the `ADCx_TRIGz` hardware
-//! triggers) live in [`crate::adc::pins`] and are applied with
-//! [`crate::gpio::set_function`] after [`crate::gpio::acquire`] (function code
-//! `15` routes the pad to the analog mux).
+//! triggers) live in [`crate::adc::pins`]. The high-level [`Adc::add_pin`] routes
+//! a pin to the analog mux (function code `15`) and remembers its channel, so you
+//! typically don't touch [`crate::gpio::set_function`] directly.
 //!
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let adc = hal::adc::Adc::new(p.ADC0, hal::adc::Config::default());
-//! let millivolts = adc.read(0) as u32 * 3300 / 4095;   // channel 0, 12-bit
+//! let mut adc = hal::adc::Adc::new(p.ADC0, hal::adc::Config::default());
+//! let pc6 = adc.add_pin(p.PC6);              // PC6 -> ADC0 channel 0
+//! let millivolts = adc.read_input(&pc6) as u32 * 3300 / 4095;
 //! ```
 
+use cortex_m::asm::nop;
 use embassy_hal_internal::{into_ref, Peripheral, PeripheralRef};
 
 use crate::mode::{Blocking, Mode};
@@ -28,6 +30,67 @@ mod instance;
 pub mod pins;
 mod types;
 pub use types::*;
+
+/// A GPIO pad that can be sampled by a specific ADC instance.
+///
+/// Implemented for every pin exposing an `ADCx_CHy` analog function. The
+/// associated [`CHANNEL`](AdcPin::CHANNEL) is the converter channel the pad
+/// becomes once routed through the analog mux, and [`FUNC`](AdcPin::FUNC) is the
+/// 4-bit `PORTx.FUNC` code (`15`) that selects the analog path. This lets the
+/// driver configure a pin's channel from its type alone -- see [`Adc::add_pin`].
+pub trait AdcPin<T: Instance>: crate::gpio::Pin {
+    /// Converter channel this pad feeds (`0`..`11`).
+    const CHANNEL: u8;
+    /// `PORTx.FUNC` code routing the pad to the analog mux (`15`).
+    const FUNC: u8;
+}
+
+macro_rules! adc_pins {
+    ($($pin:ty => $adc:ty : $chan:expr),* $(,)?) => {
+        $(
+            impl AdcPin<$adc> for $pin {
+                const CHANNEL: u8 = $chan;
+                const FUNC: u8 = 15;
+            }
+        )*
+    };
+}
+
+adc_pins! {
+    crate::gpio::PC6  => crate::Adc0 : 0,
+    crate::gpio::PC5  => crate::Adc0 : 1,
+    crate::gpio::PC4  => crate::Adc0 : 2,
+    crate::gpio::PC3  => crate::Adc0 : 3,
+    crate::gpio::PC2  => crate::Adc0 : 4,
+    crate::gpio::PC1  => crate::Adc0 : 5,
+    crate::gpio::PC0  => crate::Adc0 : 6,
+    crate::gpio::PA15 => crate::Adc0 : 7,
+    crate::gpio::PA14 => crate::Adc0 : 8,
+    crate::gpio::PA13 => crate::Adc0 : 9,
+    crate::gpio::PA12 => crate::Adc0 : 10,
+    crate::gpio::PA10 => crate::Adc0 : 11,
+    crate::gpio::PC9  => crate::Adc1 : 6,
+    crate::gpio::PC10 => crate::Adc1 : 5,
+    crate::gpio::PC11 => crate::Adc1 : 4,
+    crate::gpio::PC12 => crate::Adc1 : 3,
+    crate::gpio::PC13 => crate::Adc1 : 2,
+    crate::gpio::PD0  => crate::Adc1 : 1,
+    crate::gpio::PD1  => crate::Adc1 : 0,
+}
+
+use core::marker::PhantomData;
+
+/// An ADC input pad that has been routed to the analog mux.
+///
+/// Returned by [`Adc::add_pin`]; it owns the pad so its `PORTx.FUNC` routing
+/// stays in effect for as long as the handle lives, and it records the channel
+/// the pad maps to (via [`channel`](AdcInput::channel)) for later reads.
+pub struct AdcInput<'d, T: Instance, P: AdcPin<T>> {
+    _flex: crate::gpio::Flex<'d, P>,
+    /// ADC channel this pad feeds.
+    pub channel: u8,
+    _adc: PhantomData<T>,
+}
 
 /// An ADC driven by its peripheral clock.
 #[allow(dead_code)]
@@ -42,12 +105,37 @@ impl<'d, T: Instance, M: Mode> Adc<'d, T, M> {
         T::clear_eoc();
         T::select_channel(channel);
         T::start_conversion();
+        // Starting a conversion clears the previously latched EOC; wait a few
+        // cycles before polling so we don't read the stale flag.
+        for _ in 0..16 {
+            nop();
+        }
         while !T::eoc_sr() {
             // Spin until the conversion completes (EOC latches in SEQ0.SR).
         }
         let value = T::result();
         T::clear_eoc();
         value
+    }
+
+    /// Route `pin` to the analog mux and return an [`AdcInput`] describing it.
+    ///
+    /// This replaces the manual `Flex::new(pin).set_func(Adc0ChN)` dance: the
+    /// channel a pad maps to is known from its type, so the driver both programs
+    /// `PORTx.FUNC` (code `15`) and records the channel for later reads.
+    pub fn add_pin<P: AdcPin<T>>(&mut self, pin: impl Peripheral<P = P> + 'd) -> AdcInput<'d, T, P> {
+        let flex = crate::gpio::Flex::new(pin);
+        crate::gpio::set_function::<P>(P::FUNC);
+        AdcInput {
+            _flex: flex,
+            channel: P::CHANNEL,
+            _adc: PhantomData,
+        }
+    }
+
+    /// Synchronously convert the channel behind `input` and return its value.
+    pub fn read_input<P: AdcPin<T>>(&self, input: &AdcInput<'_, T, P>) -> u16 {
+        self.read(input.channel)
     }
 
     /// Clear the pending end-of-conversion flag.

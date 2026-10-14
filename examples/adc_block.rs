@@ -3,8 +3,9 @@
 
 //! Blocking ADC sample: convert channel 0 and print the 12-bit result over RTT.
 //!
-//! The analog pad is routed through [`swm341_hal::adc::pins`] (function code `15`,
-//! applied with [`swm341_hal::gpio::set_function`]) before this runs.
+//! `ADC0` channel 0 is wired to `PC6`. The pin is configured through the typed
+//! [`swm341_hal::adc::Adc::add_pin`] API, which routes the pad to the analog mux
+//! (function code `15`) and remembers the channel it maps to.
 
 use panic_halt as _;
 use rtt_target::{rprintln, rtt_init_print};
@@ -22,11 +23,14 @@ fn main() -> ! {
 
     rprintln!("adc_block: started, reading ADC0 channel 0");
 
-    let adc = hal::adc::Adc::new(p.adc0(), hal::adc::Config::default());
+    let mut adc = hal::adc::Adc::new(p.adc0(), hal::adc::Config::default());
+
+    // Route PC6 to the analog mux; `add_pin` records that PC6 is ADC0 channel 0.
+    let pc6 = adc.add_pin(p.PC6);
 
     loop {
-        let sample = adc.read(0);
-        rprintln!("ADC ch0 = {} (0x{:x})", sample, sample);
+        let sample = adc.read_input(&pc6);
+        rprintln!("ADC ch{} = {} (0x{:x})", pc6.channel, sample, sample);
         // ~1s delay at 150 MHz to avoid flooding the RTT channel.
         cortex_m::asm::delay(150_000_000);
     }
