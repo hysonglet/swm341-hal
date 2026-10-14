@@ -11,765 +11,92 @@
 //! [`crate::gpio::acquire`].
 
 
+/// Generate the per-pin `Pin{n}Func` enums for one bank module.
+///
+/// Each entry is `PinType => Enum { Variant = func_code, ... }`; the macro
+/// writes the `#[repr(u8)]` enum plus its `PinFunc` / `PinFuncOf` impls.
+macro_rules! pad_funcs {
+    ( $( $pin_ty:ident => $enum:ident { $( $var:ident = $val:literal ),* $(,)? } ),* $(,)? ) => {
+        $(
+            #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+            #[repr(u8)]
+            pub enum $enum {
+                $( $var = $val ),*
+            }
+            impl crate::gpio::PinFunc for $enum {
+                #[inline]
+                fn value(self) -> u8 { self as u8 }
+            }
+            impl crate::gpio::PinFuncOf<crate::gpio::$pin_ty> for $enum {}
+        )*
+    };
+}
+
 pub mod a {
-    /// PWM functions available on `PORTA` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 2: `PWM_BRK0`.
-        PwmBrk0 = 2,
+    pad_funcs! {
+        PA2 => Pin2Func { PwmBrk0 = 2 },
+        PA5 => Pin5Func { PwmBrk1 = 1, PwmClk1 = 2 },
+        PA6 => Pin6Func { PwmBrk0 = 2, PwmClk0 = 3 },
+        PA10 => Pin10Func { PwmClk1 = 2 },
+        PA11 => Pin11Func { PwmClk0 = 2 },
     }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA2>
-        for Pin2Func
-    {}
-
-    /// PWM functions available on `PORTA` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 1: `PWM_BRK1`.
-        PwmBrk1 = 1,
-        /// Code 2: `PWM_CLK1`.
-        PwmClk1 = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA5>
-        for Pin5Func
-    {}
-
-    /// PWM functions available on `PORTA` pin 6.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin6Func {
-        /// Code 2: `PWM_BRK0`.
-        PwmBrk0 = 2,
-        /// Code 3: `PWM_CLK0`.
-        PwmClk0 = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin6Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA6>
-        for Pin6Func
-    {}
-
-    /// PWM functions available on `PORTA` pin 10.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin10Func {
-        /// Code 2: `PWM_CLK1`.
-        PwmClk1 = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin10Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA10>
-        for Pin10Func
-    {}
-
-    /// PWM functions available on `PORTA` pin 11.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin11Func {
-        /// Code 2: `PWM_CLK0`.
-        PwmClk0 = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin11Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA11>
-        for Pin11Func
-    {}
-
 }
 
 pub mod b {
-    /// PWM functions available on `PORTB` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 2: `PWM3BN`.
-        Pwm3bn = 2,
+    pad_funcs! {
+        PB0 => Pin0Func { Pwm3bn = 2 },
+        PB1 => Pin1Func { Pwm3b = 1 },
+        PB2 => Pin2Func { Pwm2b = 3 },
+        PB3 => Pin3Func { Pwm2a = 3 },
+        PB11 => Pin11Func { PwmBrk2 = 3 },
+        PB12 => Pin12Func { Pwm4bn = 3 },
+        PB13 => Pin13Func { Pwm4b = 4 },
+        PB14 => Pin14Func { Pwm4an = 4 },
+        PB15 => Pin15Func { Pwm4a = 4 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB0>
-        for Pin0Func
-    {}
-
-    /// PWM functions available on `PORTB` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 1: `PWM3B`.
-        Pwm3b = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB1>
-        for Pin1Func
-    {}
-
-    /// PWM functions available on `PORTB` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 3: `PWM2B`.
-        Pwm2b = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB2>
-        for Pin2Func
-    {}
-
-    /// PWM functions available on `PORTB` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 3: `PWM2A`.
-        Pwm2a = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB3>
-        for Pin3Func
-    {}
-
-    /// PWM functions available on `PORTB` pin 11.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin11Func {
-        /// Code 3: `PWM_BRK2`.
-        PwmBrk2 = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin11Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB11>
-        for Pin11Func
-    {}
-
-    /// PWM functions available on `PORTB` pin 12.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin12Func {
-        /// Code 3: `PWM4BN`.
-        Pwm4bn = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin12Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB12>
-        for Pin12Func
-    {}
-
-    /// PWM functions available on `PORTB` pin 13.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin13Func {
-        /// Code 4: `PWM4B`.
-        Pwm4b = 4,
-    }
-
-    impl crate::gpio::PinFunc for Pin13Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB13>
-        for Pin13Func
-    {}
-
-    /// PWM functions available on `PORTB` pin 14.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin14Func {
-        /// Code 4: `PWM4AN`.
-        Pwm4an = 4,
-    }
-
-    impl crate::gpio::PinFunc for Pin14Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB14>
-        for Pin14Func
-    {}
-
-    /// PWM functions available on `PORTB` pin 15.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin15Func {
-        /// Code 4: `PWM4A`.
-        Pwm4a = 4,
-    }
-
-    impl crate::gpio::PinFunc for Pin15Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB15>
-        for Pin15Func
-    {}
-
 }
 
 pub mod c {
-    /// PWM functions available on `PORTC` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 3: `PWM3A`.
-        Pwm3a = 3,
+    pad_funcs! {
+        PC2 => Pin2Func { Pwm3a = 3 },
+        PC3 => Pin3Func { Pwm3an = 2 },
     }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC2>
-        for Pin2Func
-    {}
-
-    /// PWM functions available on `PORTC` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 2: `PWM3AN`.
-        Pwm3an = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC3>
-        for Pin3Func
-    {}
-
 }
 
 pub mod d {
-    /// PWM functions available on `PORTD` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 3: `PWM_CLK1`.
-        PwmClk1 = 3,
+    pad_funcs! {
+        PD5 => Pin5Func { PwmClk1 = 3 },
+        PD6 => Pin6Func { PwmClk0 = 3 },
+        PD8 => Pin8Func { Pwm1bn = 3 },
+        PD9 => Pin9Func { Pwm1b = 1 },
+        PD10 => Pin10Func { PwmClk1 = 1 },
+        PD11 => Pin11Func { PwmClk0 = 1 },
     }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD5>
-        for Pin5Func
-    {}
-
-    /// PWM functions available on `PORTD` pin 6.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin6Func {
-        /// Code 3: `PWM_CLK0`.
-        PwmClk0 = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin6Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD6>
-        for Pin6Func
-    {}
-
-    /// PWM functions available on `PORTD` pin 8.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin8Func {
-        /// Code 3: `PWM1BN`.
-        Pwm1bn = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin8Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD8>
-        for Pin8Func
-    {}
-
-    /// PWM functions available on `PORTD` pin 9.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin9Func {
-        /// Code 1: `PWM1B`.
-        Pwm1b = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin9Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD9>
-        for Pin9Func
-    {}
-
-    /// PWM functions available on `PORTD` pin 10.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin10Func {
-        /// Code 1: `PWM_CLK1`.
-        PwmClk1 = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin10Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD10>
-        for Pin10Func
-    {}
-
-    /// PWM functions available on `PORTD` pin 11.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin11Func {
-        /// Code 1: `PWM_CLK0`.
-        PwmClk0 = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin11Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD11>
-        for Pin11Func
-    {}
-
 }
 
 pub mod m {
-    /// PWM functions available on `PORTM` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 2: `PWM_BRK1`.
-        PwmBrk1 = 2,
+    pad_funcs! {
+        PM0 => Pin0Func { PwmBrk1 = 2 },
+        PM1 => Pin1Func { Pwm0a = 2 },
+        PM2 => Pin2Func { Pwm0b = 3 },
+        PM3 => Pin3Func { Pwm1a = 3 },
+        PM4 => Pin4Func { Pwm0an = 3 },
+        PM5 => Pin5Func { Pwm0bn = 4 },
+        PM6 => Pin6Func { Pwm1an = 3 },
+        PM8 => Pin8Func { Pwm2bn = 1 },
+        PM9 => Pin9Func { Pwm2an = 1 },
+        PM10 => Pin10Func { Pwm3a = 1 },
+        PM11 => Pin11Func { Pwm2b = 1 },
+        PM12 => Pin12Func { Pwm2a = 1 },
+        PM13 => Pin13Func { PwmBrk0 = 1 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM0>
-        for Pin0Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 2: `PWM0A`.
-        Pwm0a = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM1>
-        for Pin1Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 3: `PWM0B`.
-        Pwm0b = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM2>
-        for Pin2Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 3: `PWM1A`.
-        Pwm1a = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM3>
-        for Pin3Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 3: `PWM0AN`.
-        Pwm0an = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM4>
-        for Pin4Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 4: `PWM0BN`.
-        Pwm0bn = 4,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM5>
-        for Pin5Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 6.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin6Func {
-        /// Code 3: `PWM1AN`.
-        Pwm1an = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin6Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM6>
-        for Pin6Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 8.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin8Func {
-        /// Code 1: `PWM2BN`.
-        Pwm2bn = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin8Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM8>
-        for Pin8Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 9.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin9Func {
-        /// Code 1: `PWM2AN`.
-        Pwm2an = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin9Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM9>
-        for Pin9Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 10.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin10Func {
-        /// Code 1: `PWM3A`.
-        Pwm3a = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin10Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM10>
-        for Pin10Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 11.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin11Func {
-        /// Code 1: `PWM2B`.
-        Pwm2b = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin11Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM11>
-        for Pin11Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 12.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin12Func {
-        /// Code 1: `PWM2A`.
-        Pwm2a = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin12Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM12>
-        for Pin12Func
-    {}
-
-    /// PWM functions available on `PORTM` pin 13.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin13Func {
-        /// Code 1: `PWM_BRK0`.
-        PwmBrk0 = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin13Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM13>
-        for Pin13Func
-    {}
-
 }
 
 pub mod n {
-    /// PWM functions available on `PORTN` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 2: `PWM3AN`.
-        Pwm3an = 2,
+    pad_funcs! {
+        PN0 => Pin0Func { Pwm3an = 2 },
+        PN1 => Pin1Func { Pwm2bn = 2 },
+        PN4 => Pin4Func { Pwm2an = 4 },
+        PN5 => Pin5Func { Pwm3a = 4 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN0>
-        for Pin0Func
-    {}
-
-    /// PWM functions available on `PORTN` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 2: `PWM2BN`.
-        Pwm2bn = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN1>
-        for Pin1Func
-    {}
-
-    /// PWM functions available on `PORTN` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 4: `PWM2AN`.
-        Pwm2an = 4,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN4>
-        for Pin4Func
-    {}
-
-    /// PWM functions available on `PORTN` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 4: `PWM3A`.
-        Pwm3a = 4,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN5>
-        for Pin5Func
-    {}
-
 }

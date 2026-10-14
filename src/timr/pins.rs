@@ -10,755 +10,88 @@
 //! a variant with [`crate::gpio::set_function`] after [`crate::gpio::acquire`].
 
 
+/// Generate the per-pin `Pin{n}Func` enums for one bank module.
+///
+/// Each entry is `PinType => Enum { Variant = func_code, ... }`; the macro
+/// writes the `#[repr(u8)]` enum plus its `PinFunc` / `PinFuncOf` impls.
+macro_rules! pad_funcs {
+    ( $( $pin_ty:ident => $enum:ident { $( $var:ident = $val:literal ),* $(,)? } ),* $(,)? ) => {
+        $(
+            #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+            #[repr(u8)]
+            pub enum $enum {
+                $( $var = $val ),*
+            }
+            impl crate::gpio::PinFunc for $enum {
+                #[inline]
+                fn value(self) -> u8 { self as u8 }
+            }
+            impl crate::gpio::PinFuncOf<crate::gpio::$pin_ty> for $enum {}
+        )*
+    };
+}
+
 pub mod a {
-    /// TIMR functions available on `PORTA` pin 7.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin7Func {
-        /// Code 2: `TIMR3_IN`.
-        Timr3In = 2,
-        /// Code 3: `TIMR3_OUT`.
-        Timr3Out = 3,
+    pad_funcs! {
+        PA7 => Pin7Func { Timr3In = 2, Timr3Out = 3 },
     }
-
-    impl crate::gpio::PinFunc for Pin7Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA7>
-        for Pin7Func
-    {}
-
 }
 
 pub mod b {
-    /// TIMR functions available on `PORTB` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 4: `TIMR1_IN`.
-        Timr1In = 4,
-        /// Code 5: `TIMR1_OUT`.
-        Timr1Out = 5,
+    pad_funcs! {
+        PB0 => Pin0Func { Timr1In = 4, Timr1Out = 5 },
+        PB1 => Pin1Func { Timr0In = 2, Timr0Out = 3 },
+        PB8 => Pin8Func { Timr3In = 2, Timr3Out = 3 },
+        PB9 => Pin9Func { Timr2In = 2, Timr2Out = 3 },
+        PB10 => Pin10Func { Timr1In = 2, Timr1Out = 3 },
+        PB11 => Pin11Func { Timr0In = 4, Timr0Out = 5 },
+        PB12 => Pin12Func { Timr3In = 4, Timr3Out = 5 },
+        PB13 => Pin13Func { Timr2In = 5, Timr2Out = 6 },
+        PB14 => Pin14Func { Timr1In = 5, Timr1Out = 6 },
+        PB15 => Pin15Func { Timr0In = 5, Timr0Out = 6 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB0>
-        for Pin0Func
-    {}
-
-    /// TIMR functions available on `PORTB` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 2: `TIMR0_IN`.
-        Timr0In = 2,
-        /// Code 3: `TIMR0_OUT`.
-        Timr0Out = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB1>
-        for Pin1Func
-    {}
-
-    /// TIMR functions available on `PORTB` pin 8.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin8Func {
-        /// Code 2: `TIMR3_IN`.
-        Timr3In = 2,
-        /// Code 3: `TIMR3_OUT`.
-        Timr3Out = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin8Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB8>
-        for Pin8Func
-    {}
-
-    /// TIMR functions available on `PORTB` pin 9.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin9Func {
-        /// Code 2: `TIMR2_IN`.
-        Timr2In = 2,
-        /// Code 3: `TIMR2_OUT`.
-        Timr2Out = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin9Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB9>
-        for Pin9Func
-    {}
-
-    /// TIMR functions available on `PORTB` pin 10.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin10Func {
-        /// Code 2: `TIMR1_IN`.
-        Timr1In = 2,
-        /// Code 3: `TIMR1_OUT`.
-        Timr1Out = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin10Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB10>
-        for Pin10Func
-    {}
-
-    /// TIMR functions available on `PORTB` pin 11.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin11Func {
-        /// Code 4: `TIMR0_IN`.
-        Timr0In = 4,
-        /// Code 5: `TIMR0_OUT`.
-        Timr0Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin11Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB11>
-        for Pin11Func
-    {}
-
-    /// TIMR functions available on `PORTB` pin 12.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin12Func {
-        /// Code 4: `TIMR3_IN`.
-        Timr3In = 4,
-        /// Code 5: `TIMR3_OUT`.
-        Timr3Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin12Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB12>
-        for Pin12Func
-    {}
-
-    /// TIMR functions available on `PORTB` pin 13.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin13Func {
-        /// Code 5: `TIMR2_IN`.
-        Timr2In = 5,
-        /// Code 6: `TIMR2_OUT`.
-        Timr2Out = 6,
-    }
-
-    impl crate::gpio::PinFunc for Pin13Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB13>
-        for Pin13Func
-    {}
-
-    /// TIMR functions available on `PORTB` pin 14.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin14Func {
-        /// Code 5: `TIMR1_IN`.
-        Timr1In = 5,
-        /// Code 6: `TIMR1_OUT`.
-        Timr1Out = 6,
-    }
-
-    impl crate::gpio::PinFunc for Pin14Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB14>
-        for Pin14Func
-    {}
-
-    /// TIMR functions available on `PORTB` pin 15.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin15Func {
-        /// Code 5: `TIMR0_IN`.
-        Timr0In = 5,
-        /// Code 6: `TIMR0_OUT`.
-        Timr0Out = 6,
-    }
-
-    impl crate::gpio::PinFunc for Pin15Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB15>
-        for Pin15Func
-    {}
-
 }
 
 pub mod c {
-    /// TIMR functions available on `PORTC` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 3: `TIMR1_IN`.
-        Timr1In = 3,
-        /// Code 4: `TIMR1_OUT`.
-        Timr1Out = 4,
+    pad_funcs! {
+        PC0 => Pin0Func { Timr1In = 3, Timr1Out = 4 },
+        PC1 => Pin1Func { Timr0In = 4, Timr0Out = 5 },
+        PC2 => Pin2Func { Timr2In = 4, Timr2Out = 5 },
+        PC3 => Pin3Func { Timr3In = 4, Timr3Out = 5 },
+        PC4 => Pin4Func { Timr4In = 4, Timr4Out = 5 },
+        PC9 => Pin9Func { Timr2In = 2, Timr2Out = 3 },
+        PC10 => Pin10Func { Timr1In = 2, Timr1Out = 3 },
+        PC11 => Pin11Func { Timr0In = 2, Timr0Out = 3 },
+        PC13 => Pin13Func { Timr4In = 4, Timr4Out = 5 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC0>
-        for Pin0Func
-    {}
-
-    /// TIMR functions available on `PORTC` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 4: `TIMR0_IN`.
-        Timr0In = 4,
-        /// Code 5: `TIMR0_OUT`.
-        Timr0Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC1>
-        for Pin1Func
-    {}
-
-    /// TIMR functions available on `PORTC` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 4: `TIMR2_IN`.
-        Timr2In = 4,
-        /// Code 5: `TIMR2_OUT`.
-        Timr2Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC2>
-        for Pin2Func
-    {}
-
-    /// TIMR functions available on `PORTC` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 4: `TIMR3_IN`.
-        Timr3In = 4,
-        /// Code 5: `TIMR3_OUT`.
-        Timr3Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC3>
-        for Pin3Func
-    {}
-
-    /// TIMR functions available on `PORTC` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 4: `TIMR4_IN`.
-        Timr4In = 4,
-        /// Code 5: `TIMR4_OUT`.
-        Timr4Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC4>
-        for Pin4Func
-    {}
-
-    /// TIMR functions available on `PORTC` pin 9.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin9Func {
-        /// Code 2: `TIMR2_IN`.
-        Timr2In = 2,
-        /// Code 3: `TIMR2_OUT`.
-        Timr2Out = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin9Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC9>
-        for Pin9Func
-    {}
-
-    /// TIMR functions available on `PORTC` pin 10.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin10Func {
-        /// Code 2: `TIMR1_IN`.
-        Timr1In = 2,
-        /// Code 3: `TIMR1_OUT`.
-        Timr1Out = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin10Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC10>
-        for Pin10Func
-    {}
-
-    /// TIMR functions available on `PORTC` pin 11.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin11Func {
-        /// Code 2: `TIMR0_IN`.
-        Timr0In = 2,
-        /// Code 3: `TIMR0_OUT`.
-        Timr0Out = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin11Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC11>
-        for Pin11Func
-    {}
-
-    /// TIMR functions available on `PORTC` pin 13.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin13Func {
-        /// Code 4: `TIMR4_IN`.
-        Timr4In = 4,
-        /// Code 5: `TIMR4_OUT`.
-        Timr4Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin13Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC13>
-        for Pin13Func
-    {}
-
 }
 
 pub mod d {
-    /// TIMR functions available on `PORTD` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 2: `TIMR3_IN`.
-        Timr3In = 2,
-        /// Code 3: `TIMR3_OUT`.
-        Timr3Out = 3,
+    pad_funcs! {
+        PD0 => Pin0Func { Timr3In = 2, Timr3Out = 3 },
+        PD8 => Pin8Func { Timr4In = 4, Timr4Out = 5 },
+        PD9 => Pin9Func { Timr3In = 2, Timr3Out = 3 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD0>
-        for Pin0Func
-    {}
-
-    /// TIMR functions available on `PORTD` pin 8.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin8Func {
-        /// Code 4: `TIMR4_IN`.
-        Timr4In = 4,
-        /// Code 5: `TIMR4_OUT`.
-        Timr4Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin8Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD8>
-        for Pin8Func
-    {}
-
-    /// TIMR functions available on `PORTD` pin 9.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin9Func {
-        /// Code 2: `TIMR3_IN`.
-        Timr3In = 2,
-        /// Code 3: `TIMR3_OUT`.
-        Timr3Out = 3,
-    }
-
-    impl crate::gpio::PinFunc for Pin9Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD9>
-        for Pin9Func
-    {}
-
 }
 
 pub mod m {
-    /// TIMR functions available on `PORTM` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 3: `TIMR2_IN`.
-        Timr2In = 3,
-        /// Code 4: `TIMR2_OUT`.
-        Timr2Out = 4,
+    pad_funcs! {
+        PM1 => Pin1Func { Timr2In = 3, Timr2Out = 4 },
+        PM2 => Pin2Func { Timr1In = 5, Timr1Out = 6 },
+        PM3 => Pin3Func { Timr0In = 5, Timr0Out = 6 },
+        PM4 => Pin4Func { Timr2In = 5, Timr2Out = 6 },
+        PM5 => Pin5Func { Timr1In = 6, Timr1Out = 7 },
+        PM6 => Pin6Func { Timr0In = 4, Timr0Out = 5 },
+        PM14 => Pin14Func { Timr3In = 1, Timr3Out = 2 },
+        PM15 => Pin15Func { Timr2In = 1, Timr2Out = 2 },
     }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM1>
-        for Pin1Func
-    {}
-
-    /// TIMR functions available on `PORTM` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 5: `TIMR1_IN`.
-        Timr1In = 5,
-        /// Code 6: `TIMR1_OUT`.
-        Timr1Out = 6,
-    }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM2>
-        for Pin2Func
-    {}
-
-    /// TIMR functions available on `PORTM` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 5: `TIMR0_IN`.
-        Timr0In = 5,
-        /// Code 6: `TIMR0_OUT`.
-        Timr0Out = 6,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM3>
-        for Pin3Func
-    {}
-
-    /// TIMR functions available on `PORTM` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 5: `TIMR2_IN`.
-        Timr2In = 5,
-        /// Code 6: `TIMR2_OUT`.
-        Timr2Out = 6,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM4>
-        for Pin4Func
-    {}
-
-    /// TIMR functions available on `PORTM` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 6: `TIMR1_IN`.
-        Timr1In = 6,
-        /// Code 7: `TIMR1_OUT`.
-        Timr1Out = 7,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM5>
-        for Pin5Func
-    {}
-
-    /// TIMR functions available on `PORTM` pin 6.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin6Func {
-        /// Code 4: `TIMR0_IN`.
-        Timr0In = 4,
-        /// Code 5: `TIMR0_OUT`.
-        Timr0Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin6Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM6>
-        for Pin6Func
-    {}
-
-    /// TIMR functions available on `PORTM` pin 14.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin14Func {
-        /// Code 1: `TIMR3_IN`.
-        Timr3In = 1,
-        /// Code 2: `TIMR3_OUT`.
-        Timr3Out = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin14Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM14>
-        for Pin14Func
-    {}
-
-    /// TIMR functions available on `PORTM` pin 15.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin15Func {
-        /// Code 1: `TIMR2_IN`.
-        Timr2In = 1,
-        /// Code 2: `TIMR2_OUT`.
-        Timr2Out = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin15Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM15>
-        for Pin15Func
-    {}
-
 }
 
 pub mod n {
-    /// TIMR functions available on `PORTN` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 4: `TIMR1_IN`.
-        Timr1In = 4,
-        /// Code 5: `TIMR1_OUT`.
-        Timr1Out = 5,
+    pad_funcs! {
+        PN0 => Pin0Func { Timr1In = 4, Timr1Out = 5 },
+        PN1 => Pin1Func { Timr0In = 4, Timr0Out = 5 },
+        PN4 => Pin4Func { Timr3In = 6, Timr3Out = 7 },
+        PN5 => Pin5Func { Timr2In = 7, Timr2Out = 8 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN0>
-        for Pin0Func
-    {}
-
-    /// TIMR functions available on `PORTN` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 4: `TIMR0_IN`.
-        Timr0In = 4,
-        /// Code 5: `TIMR0_OUT`.
-        Timr0Out = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN1>
-        for Pin1Func
-    {}
-
-    /// TIMR functions available on `PORTN` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 6: `TIMR3_IN`.
-        Timr3In = 6,
-        /// Code 7: `TIMR3_OUT`.
-        Timr3Out = 7,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN4>
-        for Pin4Func
-    {}
-
-    /// TIMR functions available on `PORTN` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 7: `TIMR2_IN`.
-        Timr2In = 7,
-        /// Code 8: `TIMR2_OUT`.
-        Timr2Out = 8,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN5>
-        for Pin5Func
-    {}
-
 }

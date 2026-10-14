@@ -9,400 +9,73 @@
 //! type-checked argument to [`crate::i2c::I2c::new`].
 
 
+/// Generate the per-pin `Pin{n}Func` enums for one bank module.
+///
+/// Each entry is `PinType => Enum { Variant = func_code, ... }`; the macro
+/// writes the `#[repr(u8)]` enum plus its `PinFunc` / `PinFuncOf` impls.
+macro_rules! pad_funcs {
+    ( $( $pin_ty:ident => $enum:ident { $( $var:ident = $val:literal ),* $(,)? } ),* $(,)? ) => {
+        $(
+            #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+            #[repr(u8)]
+            pub enum $enum {
+                $( $var = $val ),*
+            }
+            impl crate::gpio::PinFunc for $enum {
+                #[inline]
+                fn value(self) -> u8 { self as u8 }
+            }
+            impl crate::gpio::PinFuncOf<crate::gpio::$pin_ty> for $enum {}
+        )*
+    };
+}
+
 pub mod a {
-    /// I2C functions available on `PORTA` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 1: `I2C0_SDA`.
-        I2c0Sda = 1,
+    pad_funcs! {
+        PA0 => Pin0Func { I2c0Sda = 1 },
+        PA1 => Pin1Func { I2c0Scl = 1 },
+        PA3 => Pin3Func { I2c0Sda = 1 },
+        PA4 => Pin4Func { I2c0Scl = 1 },
+        PA6 => Pin6Func { I2c1Sda = 1 },
+        PA7 => Pin7Func { I2c1Scl = 1 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA0>
-        for Pin0Func
-    {}
-
-    /// I2C functions available on `PORTA` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 1: `I2C0_SCL`.
-        I2c0Scl = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA1>
-        for Pin1Func
-    {}
-
-    /// I2C functions available on `PORTA` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 1: `I2C0_SDA`.
-        I2c0Sda = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA3>
-        for Pin3Func
-    {}
-
-    /// I2C functions available on `PORTA` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 1: `I2C0_SCL`.
-        I2c0Scl = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA4>
-        for Pin4Func
-    {}
-
-    /// I2C functions available on `PORTA` pin 6.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin6Func {
-        /// Code 1: `I2C1_SDA`.
-        I2c1Sda = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin6Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA6>
-        for Pin6Func
-    {}
-
-    /// I2C functions available on `PORTA` pin 7.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin7Func {
-        /// Code 1: `I2C1_SCL`.
-        I2c1Scl = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin7Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA7>
-        for Pin7Func
-    {}
-
 }
 
 pub mod b {
-    /// I2C functions available on `PORTB` pin 13.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin13Func {
-        /// Code 2: `I2C1_SDA`.
-        I2c1Sda = 2,
+    pad_funcs! {
+        PB13 => Pin13Func { I2c1Sda = 2 },
+        PB15 => Pin15Func { I2c1Scl = 2 },
     }
-
-    impl crate::gpio::PinFunc for Pin13Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB13>
-        for Pin13Func
-    {}
-
-    /// I2C functions available on `PORTB` pin 15.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin15Func {
-        /// Code 2: `I2C1_SCL`.
-        I2c1Scl = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin15Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB15>
-        for Pin15Func
-    {}
-
 }
 
 pub mod c {
-    /// I2C functions available on `PORTC` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 1: `I2C0_SDA`.
-        I2c0Sda = 1,
+    pad_funcs! {
+        PC1 => Pin1Func { I2c0Sda = 1 },
+        PC2 => Pin2Func { I2c0Scl = 1 },
+        PC4 => Pin4Func { I2c1Sda = 1 },
+        PC5 => Pin5Func { I2c1Scl = 1 },
+        PC13 => Pin13Func { I2c0Sda = 1 },
     }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC1>
-        for Pin1Func
-    {}
-
-    /// I2C functions available on `PORTC` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 1: `I2C0_SCL`.
-        I2c0Scl = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC2>
-        for Pin2Func
-    {}
-
-    /// I2C functions available on `PORTC` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 1: `I2C1_SDA`.
-        I2c1Sda = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC4>
-        for Pin4Func
-    {}
-
-    /// I2C functions available on `PORTC` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 1: `I2C1_SCL`.
-        I2c1Scl = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC5>
-        for Pin5Func
-    {}
-
-    /// I2C functions available on `PORTC` pin 13.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin13Func {
-        /// Code 1: `I2C0_SDA`.
-        I2c0Sda = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin13Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC13>
-        for Pin13Func
-    {}
-
 }
 
 pub mod d {
-    /// I2C functions available on `PORTD` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 1: `I2C0_SCL`.
-        I2c0Scl = 1,
+    pad_funcs! {
+        PD0 => Pin0Func { I2c0Scl = 1 },
+        PD7 => Pin7Func { I2c1Sda = 2 },
+        PD8 => Pin8Func { I2c1Scl = 1 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD0>
-        for Pin0Func
-    {}
-
-    /// I2C functions available on `PORTD` pin 7.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin7Func {
-        /// Code 2: `I2C1_SDA`.
-        I2c1Sda = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin7Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD7>
-        for Pin7Func
-    {}
-
-    /// I2C functions available on `PORTD` pin 8.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin8Func {
-        /// Code 1: `I2C1_SCL`.
-        I2c1Scl = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin8Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD8>
-        for Pin8Func
-    {}
-
 }
 
 pub mod m {
-    /// I2C functions available on `PORTM` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 1: `I2C1_SDA`.
-        I2c1Sda = 1,
+    pad_funcs! {
+        PM5 => Pin5Func { I2c1Sda = 1 },
+        PM6 => Pin6Func { I2c1Scl = 1 },
     }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM5>
-        for Pin5Func
-    {}
-
-    /// I2C functions available on `PORTM` pin 6.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin6Func {
-        /// Code 1: `I2C1_SCL`.
-        I2c1Scl = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin6Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM6>
-        for Pin6Func
-    {}
-
 }
 
 pub mod n {
-    /// I2C functions available on `PORTN` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 1: `I2C0_SDA`.
-        I2c0Sda = 1,
+    pad_funcs! {
+        PN4 => Pin4Func { I2c0Sda = 1 },
+        PN5 => Pin5Func { I2c0Scl = 1 },
     }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN4>
-        for Pin4Func
-    {}
-
-    /// I2C functions available on `PORTN` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 1: `I2C0_SCL`.
-        I2c0Scl = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN5>
-        for Pin5Func
-    {}
-
 }

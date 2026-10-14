@@ -154,7 +154,12 @@ def classify(name):
 
 
 def emit_peripheral(periph, table, out_path):
-    """Write the `pins.rs` for one peripheral, filtered to its pad functions."""
+    """Write the `pins.rs` for one peripheral, filtered to its pad functions.
+
+    The repetitive per-pin enum + `PinFunc`/`PinFuncOf` boilerplate is collapsed
+    into a single `pad_funcs!` macro; each bank module then just lists its pads
+    as `PinType => Enum { Variant = func_code, ... }` data.
+    """
     by_port = {}
     for (port, pin), variants in table.items():
         matches = [v for v in variants if classify(v[1]) == periph]
@@ -162,38 +167,40 @@ def emit_peripheral(periph, table, out_path):
             by_port.setdefault(port, {})[pin] = sorted(matches, key=lambda v: v[0])
 
     lines = [BANNERS[periph]]
-    label = periph.upper()
+    lines.extend(
+        [
+            "/// Generate the per-pin `Pin{n}Func` enums for one bank module.",
+            "///",
+            "/// Each entry is `PinType => Enum { Variant = func_code, ... }`; the macro",
+            "/// writes the `#[repr(u8)]` enum plus its `PinFunc` / `PinFuncOf` impls.",
+            "macro_rules! pad_funcs {",
+            "    ( $( $pin_ty:ident => $enum:ident { $( $var:ident = $val:literal ),* $(,)? } ),* $(,)? ) => {",
+            "        $(",
+            "            #[derive(Clone, Copy, PartialEq, Eq, Debug)]",
+            "            #[repr(u8)]",
+            "            pub enum $enum {",
+            "                $( $var = $val ),*",
+            "            }",
+            "            impl crate::gpio::PinFunc for $enum {",
+            "                #[inline]",
+            "                fn value(self) -> u8 { self as u8 }",
+            "            }",
+            "            impl crate::gpio::PinFuncOf<crate::gpio::$pin_ty> for $enum {}",
+            "        )*",
+            "    };",
+            "}",
+            "",
+        ]
+    )
+
     for port in sorted(by_port):
         lines.append(f"pub mod {port.lower()} {{")
+        lines.append("    pad_funcs! {")
         for pin in sorted(by_port[port]):
             matches = by_port[port][pin]
-            lines.append(
-                f"    /// {label} functions available on `PORT{port}` pin {pin}."
-            )
-            lines.append("    #[derive(Clone, Copy, PartialEq, Eq, Debug)]")
-            lines.append("    #[repr(u8)]")
-            lines.append(f"    pub enum Pin{pin}Func {{")
-            for value, raw, cam in matches:
-                lines.append(f"        /// Code {value}: `{raw}`.")
-                lines.append(f"        {cam} = {value},")
-            lines.extend(
-                [
-                    "    }",
-                    "",
-                    f"    impl crate::gpio::PinFunc for Pin{pin}Func {{",
-                    "        #[inline]",
-                    "        fn value(self) -> u8 {",
-                    "            self as u8",
-                    "        }",
-                    "    }",
-                    "",
-                    f"    impl crate::gpio::PinFuncOf<crate::gpio::P{port}{pin}>",
-                    f"        for Pin{pin}Func",
-                    "    {}",
-                    "",
-                ]
-            )
-        lines.extend(["}", ""])
+            variants = ", ".join(f"{cam} = {value}" for (value, _raw, cam) in matches)
+            lines.append(f"        P{port}{pin} => Pin{pin}Func {{ {variants} }},")
+        lines.extend(["    }", "}", ""])
 
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines).rstrip() + "\n")

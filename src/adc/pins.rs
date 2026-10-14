@@ -11,472 +11,67 @@
 //! after [`crate::gpio::acquire`].
 
 
+/// Generate the per-pin `Pin{n}Func` enums for one bank module.
+///
+/// Each entry is `PinType => Enum { Variant = func_code, ... }`; the macro
+/// writes the `#[repr(u8)]` enum plus its `PinFunc` / `PinFuncOf` impls.
+macro_rules! pad_funcs {
+    ( $( $pin_ty:ident => $enum:ident { $( $var:ident = $val:literal ),* $(,)? } ),* $(,)? ) => {
+        $(
+            #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+            #[repr(u8)]
+            pub enum $enum {
+                $( $var = $val ),*
+            }
+            impl crate::gpio::PinFunc for $enum {
+                #[inline]
+                fn value(self) -> u8 { self as u8 }
+            }
+            impl crate::gpio::PinFuncOf<crate::gpio::$pin_ty> for $enum {}
+        )*
+    };
+}
+
 pub mod a {
-    /// ADC functions available on `PORTA` pin 10.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin10Func {
-        /// Code 15: `ADC0_CH11`.
-        Adc0Ch11 = 15,
+    pad_funcs! {
+        PA10 => Pin10Func { Adc0Ch11 = 15 },
+        PA11 => Pin11Func { Adc1Trig1 = 5 },
+        PA12 => Pin12Func { Adc0Trig1 = 5, Adc0Ch10 = 15 },
+        PA13 => Pin13Func { Adc0Ch9 = 15 },
+        PA14 => Pin14Func { Adc0Ch8 = 15 },
+        PA15 => Pin15Func { Adc0Ch7 = 15 },
     }
-
-    impl crate::gpio::PinFunc for Pin10Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA10>
-        for Pin10Func
-    {}
-
-    /// ADC functions available on `PORTA` pin 11.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin11Func {
-        /// Code 5: `ADC1_TRIG1`.
-        Adc1Trig1 = 5,
-    }
-
-    impl crate::gpio::PinFunc for Pin11Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA11>
-        for Pin11Func
-    {}
-
-    /// ADC functions available on `PORTA` pin 12.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin12Func {
-        /// Code 5: `ADC0_TRIG1`.
-        Adc0Trig1 = 5,
-        /// Code 15: `ADC0_CH10`.
-        Adc0Ch10 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin12Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA12>
-        for Pin12Func
-    {}
-
-    /// ADC functions available on `PORTA` pin 13.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin13Func {
-        /// Code 15: `ADC0_CH9`.
-        Adc0Ch9 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin13Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA13>
-        for Pin13Func
-    {}
-
-    /// ADC functions available on `PORTA` pin 14.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin14Func {
-        /// Code 15: `ADC0_CH8`.
-        Adc0Ch8 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin14Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA14>
-        for Pin14Func
-    {}
-
-    /// ADC functions available on `PORTA` pin 15.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin15Func {
-        /// Code 15: `ADC0_CH7`.
-        Adc0Ch7 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin15Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PA15>
-        for Pin15Func
-    {}
-
 }
 
 pub mod c {
-    /// ADC functions available on `PORTC` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 15: `ADC0_CH6`.
-        Adc0Ch6 = 15,
+    pad_funcs! {
+        PC0 => Pin0Func { Adc0Ch6 = 15 },
+        PC1 => Pin1Func { Adc0Ch5 = 15 },
+        PC2 => Pin2Func { Adc0Ch4 = 15 },
+        PC3 => Pin3Func { Adc0Ch3 = 15 },
+        PC4 => Pin4Func { Adc0Ch2 = 15 },
+        PC5 => Pin5Func { Adc0Ch1 = 15 },
+        PC6 => Pin6Func { Adc0Ch0 = 15 },
+        PC9 => Pin9Func { Adc1Ch6 = 15 },
+        PC10 => Pin10Func { Adc1Ch5 = 15 },
+        PC11 => Pin11Func { Adc1Ch4 = 15 },
+        PC12 => Pin12Func { Adc1Ch3 = 15 },
+        PC13 => Pin13Func { Adc1Ch2 = 15 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC0>
-        for Pin0Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 15: `ADC0_CH5`.
-        Adc0Ch5 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC1>
-        for Pin1Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 15: `ADC0_CH4`.
-        Adc0Ch4 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC2>
-        for Pin2Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 15: `ADC0_CH3`.
-        Adc0Ch3 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC3>
-        for Pin3Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 15: `ADC0_CH2`.
-        Adc0Ch2 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC4>
-        for Pin4Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 15: `ADC0_CH1`.
-        Adc0Ch1 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC5>
-        for Pin5Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 6.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin6Func {
-        /// Code 15: `ADC0_CH0`.
-        Adc0Ch0 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin6Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC6>
-        for Pin6Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 9.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin9Func {
-        /// Code 15: `ADC1_CH6`.
-        Adc1Ch6 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin9Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC9>
-        for Pin9Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 10.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin10Func {
-        /// Code 15: `ADC1_CH5`.
-        Adc1Ch5 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin10Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC10>
-        for Pin10Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 11.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin11Func {
-        /// Code 15: `ADC1_CH4`.
-        Adc1Ch4 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin11Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC11>
-        for Pin11Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 12.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin12Func {
-        /// Code 15: `ADC1_CH3`.
-        Adc1Ch3 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin12Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC12>
-        for Pin12Func
-    {}
-
-    /// ADC functions available on `PORTC` pin 13.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin13Func {
-        /// Code 15: `ADC1_CH2`.
-        Adc1Ch2 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin13Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC13>
-        for Pin13Func
-    {}
-
 }
 
 pub mod d {
-    /// ADC functions available on `PORTD` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 15: `ADC1_CH1`.
-        Adc1Ch1 = 15,
+    pad_funcs! {
+        PD0 => Pin0Func { Adc1Ch1 = 15 },
+        PD1 => Pin1Func { Adc1Ch0 = 15 },
+        PD3 => Pin3Func { Adc1Trig1 = 6 },
+        PD4 => Pin4Func { Adc0Trig1 = 7 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD0>
-        for Pin0Func
-    {}
-
-    /// ADC functions available on `PORTD` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 15: `ADC1_CH0`.
-        Adc1Ch0 = 15,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD1>
-        for Pin1Func
-    {}
-
-    /// ADC functions available on `PORTD` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 6: `ADC1_TRIG1`.
-        Adc1Trig1 = 6,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD3>
-        for Pin3Func
-    {}
-
-    /// ADC functions available on `PORTD` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 7: `ADC0_TRIG1`.
-        Adc0Trig1 = 7,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PD4>
-        for Pin4Func
-    {}
-
 }
 
 pub mod n {
-    /// ADC functions available on `PORTN` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 10: `ADC1_TRIG0`.
-        Adc1Trig0 = 10,
+    pad_funcs! {
+        PN4 => Pin4Func { Adc1Trig0 = 10 },
+        PN5 => Pin5Func { Adc0Trig0 = 12 },
     }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN4>
-        for Pin4Func
-    {}
-
-    /// ADC functions available on `PORTN` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 12: `ADC0_TRIG0`.
-        Adc0Trig0 = 12,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN5>
-        for Pin5Func
-    {}
-
 }

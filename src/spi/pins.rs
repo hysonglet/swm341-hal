@@ -9,394 +9,63 @@
 //! type-checked argument to [`crate::spi::Spi::new`].
 
 
+/// Generate the per-pin `Pin{n}Func` enums for one bank module.
+///
+/// Each entry is `PinType => Enum { Variant = func_code, ... }`; the macro
+/// writes the `#[repr(u8)]` enum plus its `PinFunc` / `PinFuncOf` impls.
+macro_rules! pad_funcs {
+    ( $( $pin_ty:ident => $enum:ident { $( $var:ident = $val:literal ),* $(,)? } ),* $(,)? ) => {
+        $(
+            #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+            #[repr(u8)]
+            pub enum $enum {
+                $( $var = $val ),*
+            }
+            impl crate::gpio::PinFunc for $enum {
+                #[inline]
+                fn value(self) -> u8 { self as u8 }
+            }
+            impl crate::gpio::PinFuncOf<crate::gpio::$pin_ty> for $enum {}
+        )*
+    };
+}
+
 pub mod b {
-    /// SPI functions available on `PORTB` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 1: `SPI1_SCLK`.
-        Spi1Sclk = 1,
+    pad_funcs! {
+        PB2 => Pin2Func { Spi1Sclk = 1 },
+        PB3 => Pin3Func { Spi1Miso = 1 },
+        PB4 => Pin4Func { Spi1Mosi = 1 },
+        PB5 => Pin5Func { Spi1Ssel = 1 },
+        PB8 => Pin8Func { Spi0Sclk = 1 },
+        PB9 => Pin9Func { Spi0Miso = 1 },
+        PB10 => Pin10Func { Spi0Mosi = 1 },
+        PB14 => Pin14Func { Spi0Ssel = 2 },
     }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB2>
-        for Pin2Func
-    {}
-
-    /// SPI functions available on `PORTB` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 1: `SPI1_MISO`.
-        Spi1Miso = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB3>
-        for Pin3Func
-    {}
-
-    /// SPI functions available on `PORTB` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 1: `SPI1_MOSI`.
-        Spi1Mosi = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB4>
-        for Pin4Func
-    {}
-
-    /// SPI functions available on `PORTB` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 1: `SPI1_SSEL`.
-        Spi1Ssel = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB5>
-        for Pin5Func
-    {}
-
-    /// SPI functions available on `PORTB` pin 8.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin8Func {
-        /// Code 1: `SPI0_SCLK`.
-        Spi0Sclk = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin8Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB8>
-        for Pin8Func
-    {}
-
-    /// SPI functions available on `PORTB` pin 9.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin9Func {
-        /// Code 1: `SPI0_MISO`.
-        Spi0Miso = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin9Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB9>
-        for Pin9Func
-    {}
-
-    /// SPI functions available on `PORTB` pin 10.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin10Func {
-        /// Code 1: `SPI0_MOSI`.
-        Spi0Mosi = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin10Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB10>
-        for Pin10Func
-    {}
-
-    /// SPI functions available on `PORTB` pin 14.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin14Func {
-        /// Code 2: `SPI0_SSEL`.
-        Spi0Ssel = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin14Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PB14>
-        for Pin14Func
-    {}
-
 }
 
 pub mod c {
-    /// SPI functions available on `PORTC` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 2: `SPI1_SSEL`.
-        Spi1Ssel = 2,
+    pad_funcs! {
+        PC4 => Pin4Func { Spi1Ssel = 2 },
+        PC5 => Pin5Func { Spi1Miso = 2 },
+        PC6 => Pin6Func { Spi1Mosi = 1 },
+        PC7 => Pin7Func { Spi1Sclk = 1 },
     }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC4>
-        for Pin4Func
-    {}
-
-    /// SPI functions available on `PORTC` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 2: `SPI1_MISO`.
-        Spi1Miso = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC5>
-        for Pin5Func
-    {}
-
-    /// SPI functions available on `PORTC` pin 6.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin6Func {
-        /// Code 1: `SPI1_MOSI`.
-        Spi1Mosi = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin6Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC6>
-        for Pin6Func
-    {}
-
-    /// SPI functions available on `PORTC` pin 7.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin7Func {
-        /// Code 1: `SPI1_SCLK`.
-        Spi1Sclk = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin7Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PC7>
-        for Pin7Func
-    {}
-
 }
 
 pub mod m {
-    /// SPI functions available on `PORTM` pin 2.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin2Func {
-        /// Code 1: `SPI0_SCLK`.
-        Spi0Sclk = 1,
+    pad_funcs! {
+        PM2 => Pin2Func { Spi0Sclk = 1 },
+        PM3 => Pin3Func { Spi0Ssel = 1 },
+        PM4 => Pin4Func { Spi0Miso = 1 },
+        PM5 => Pin5Func { Spi0Mosi = 2 },
     }
-
-    impl crate::gpio::PinFunc for Pin2Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM2>
-        for Pin2Func
-    {}
-
-    /// SPI functions available on `PORTM` pin 3.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin3Func {
-        /// Code 1: `SPI0_SSEL`.
-        Spi0Ssel = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin3Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM3>
-        for Pin3Func
-    {}
-
-    /// SPI functions available on `PORTM` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 1: `SPI0_MISO`.
-        Spi0Miso = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM4>
-        for Pin4Func
-    {}
-
-    /// SPI functions available on `PORTM` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 2: `SPI0_MOSI`.
-        Spi0Mosi = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PM5>
-        for Pin5Func
-    {}
-
 }
 
 pub mod n {
-    /// SPI functions available on `PORTN` pin 0.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin0Func {
-        /// Code 1: `SPI1_SCLK`.
-        Spi1Sclk = 1,
+    pad_funcs! {
+        PN0 => Pin0Func { Spi1Sclk = 1 },
+        PN1 => Pin1Func { Spi1Ssel = 1 },
+        PN4 => Pin4Func { Spi1Miso = 2 },
+        PN5 => Pin5Func { Spi1Mosi = 2 },
     }
-
-    impl crate::gpio::PinFunc for Pin0Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN0>
-        for Pin0Func
-    {}
-
-    /// SPI functions available on `PORTN` pin 1.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin1Func {
-        /// Code 1: `SPI1_SSEL`.
-        Spi1Ssel = 1,
-    }
-
-    impl crate::gpio::PinFunc for Pin1Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN1>
-        for Pin1Func
-    {}
-
-    /// SPI functions available on `PORTN` pin 4.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin4Func {
-        /// Code 2: `SPI1_MISO`.
-        Spi1Miso = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin4Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN4>
-        for Pin4Func
-    {}
-
-    /// SPI functions available on `PORTN` pin 5.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    #[repr(u8)]
-    pub enum Pin5Func {
-        /// Code 2: `SPI1_MOSI`.
-        Spi1Mosi = 2,
-    }
-
-    impl crate::gpio::PinFunc for Pin5Func {
-        #[inline]
-        fn value(self) -> u8 {
-            self as u8
-        }
-    }
-
-    impl crate::gpio::PinFuncOf<crate::gpio::PN5>
-        for Pin5Func
-    {}
-
 }
