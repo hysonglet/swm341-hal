@@ -1,0 +1,14 @@
+# Build artifacts
+/target
+
+# OS files
+.DS_Store
+
+# Local tooling / skill directories
+/rust-embedded-driver-develop-skill
+
+# Cargo.lock is not committed for this library crate
+Cargo.lock
+
+# Vendor reference docs (nested repo, not committed)
+doc/SWM341_Lib

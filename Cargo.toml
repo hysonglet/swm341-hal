@@ -1,0 +1,105 @@
+[package]
+name = "swm341-hal"
+version = "0.1.0"
+edition = "2021"
+description = "HAL for Synwit SWM341 microcontrollers (Arm China STAR-MC1 / Armv8-M Mainline)"
+keywords = ["no-std", "embedded", "swm", "synwit", "hal"]
+categories = ["embedded", "no-std", "hardware-support"]
+license = "0BSD"
+
+[dependencies]
+swm341-pac = { git = "https://github.com/hysonglet/swm-pacs.git" }
+
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+# `device` makes cortex-m-rt pull in this crate's `device.x`, which carries the
+# 89 vectors the PAC's SVD is missing. The PAC's own `rt` feature is left off on
+# purpose: it would inject a second, shorter `__INTERRUPTS` table.
+cortex-m-rt = { version = "0.7.3", features = ["device"] }
+critical-section = "1.1"
+embedded-hal = "1.0"
+embedded-hal-async = { version = "1.0", optional = true }
+embedded-hal-027 = { package = "embedded-hal", version = "0.2.7", features = ["unproven"] }
+# The datasheet promises eight priority levels (3 bits); the SVD claims 2, which
+# the same file also gets wrong when it calls the core a Cortex-M0.
+embassy-hal-internal = { version = "0.2", features = ["cortex-m", "prio-bits-3"] }
+embassy-sync = { version = "0.6", optional = true }
+embassy-time-driver = { version = "0.2", optional = true }
+
+[dev-dependencies]
+embassy-executor = { version = "0.7", features = ["arch-cortex-m", "executor-thread"] }
+embassy-time = { version = "0.4", features = ["tick-hz-1_000"] }
+panic-halt = "0.2"
+
+[features]
+default = ["embassy"]
+# Enables the `Async` driver mode: every peripheral gains `.await` based APIs
+# implemented on top of `embassy-sync` wakers.
+embassy = [
+    "dep:embassy-sync",
+    "dep:embassy-time-driver",
+    "dep:embedded-hal-async",
+    "embassy-time-driver/tick-hz-1_000",
+]
+
+[[example]]
+name = "embassy_gpio_blink"
+required-features = ["embassy"]
+
+[[example]]
+name = "embassy_gpio_exti"
+required-features = ["embassy"]
+
+[[example]]
+name = "spi_block"
+
+[[example]]
+name = "i2c_block"
+
+[[example]]
+name = "embassy_spi"
+required-features = ["embassy"]
+
+[[example]]
+name = "embassy_i2c"
+required-features = ["embassy"]
+
+[[example]]
+name = "i2c_slave"
+
+[[example]]
+name = "spi_slave"
+
+[[example]]
+name = "embassy_i2c_slave"
+required-features = ["embassy"]
+
+[[example]]
+name = "embassy_spi_slave"
+required-features = ["embassy"]
+
+[[example]]
+name = "timr_block"
+
+[[example]]
+name = "pwm_block"
+
+[[example]]
+name = "adc_block"
+
+[[example]]
+name = "embassy_timr"
+required-features = ["embassy"]
+
+[[example]]
+name = "embassy_pwm"
+required-features = ["embassy"]
+
+[[example]]
+name = "embassy_adc"
+required-features = ["embassy"]
+
+[profile.release]
+codegen-units = 1
+debug = 1
+lto = true
+opt-level = "s"
