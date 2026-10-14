@@ -8,4 +8,4 @@ rustflags = [
 ]
 # `cargo run` flashes the firmware with probe-rs and attaches RTT so the
 # `rprintln!` output from the examples shows up in the terminal.
-runner = "probe-rs run --chip swm341 --rtt"
+runner = "probe-rs run --chip swm341"
