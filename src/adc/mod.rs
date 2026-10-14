@@ -42,8 +42,8 @@ impl<'d, T: Instance, M: Mode> Adc<'d, T, M> {
         T::clear_eoc();
         T::select_channel(channel);
         T::start_conversion();
-        while !T::eoc_flag() && !T::busy() {
-            // Spin until the conversion completes (either flag latches first).
+        while !T::eoc_sr() {
+            // Spin until the conversion completes (EOC latches in SEQ0.SR).
         }
         let value = T::result();
         T::clear_eoc();
@@ -75,6 +75,8 @@ impl<'d, T: Instance> Adc<'d, T, Blocking> {
         T::clock().open();
         T::enable();
         T::set_sampling(config.sampling_time);
+        // Arm sequence 0 for software (GO) triggering, matching the vendor flow.
+        T::set_trigger(0x1);
         Self {
             peri,
             _mode: core::marker::PhantomData,
@@ -94,6 +96,7 @@ impl<'d, T: Instance> Adc<'d, T, Async> {
         T::clock().open();
         T::enable();
         T::set_sampling(config.sampling_time);
+        T::set_trigger(0x1);
         Self {
             peri,
             _mode: core::marker::PhantomData,

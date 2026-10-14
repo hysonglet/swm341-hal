@@ -17,10 +17,31 @@ pub(crate) type Block = pac::adc0::RegisterBlock;
 /// Register access shared by every ADC instance.
 pub(crate) mod hw {
     use super::Block;
+    use cortex_m::asm::nop;
 
-    /// Power on the converter (`CR.EN`).
+    /// Power on the converter.
+    ///
+    /// The internal analog LDO (`CR2.ENLDO`) must be enabled and given a short
+    /// settle time *before* `CR.EN` is asserted, otherwise the converter never
+    /// finishes a conversion (its busy flag never rises and EOC never latches).
     pub(crate) fn enable(regs: &Block) {
+        regs.cr2.modify(|_, w| w.enldo().set_bit());
+        for _ in 0..(64 * 20) {
+            nop();
+        }
         regs.cr.modify(|_, w| w.en().set_bit());
+    }
+
+    /// Select the trigger source for sequence 0 (`1` = software start via `GO`).
+    pub(crate) fn set_trigger(regs: &Block, src: u8) {
+        regs.seqtrg
+            .modify(|_, w| unsafe { w.seq0().bits(src) });
+    }
+
+    /// True once sequence 0 has finished, read from the sequence status register
+    /// (`SEQ0.SR.EOC`) -- this is the flag the vendor library polls.
+    pub(crate) fn eoc_sr(regs: &Block) -> bool {
+        regs.seq0.sr.read().eoc().bit()
     }
 
     /// Program the sampling-time register (`SEQ_SMP`).
@@ -94,6 +115,16 @@ pub(crate) mod sealed {
         #[inline(always)]
         fn enable() {
             hw::enable(unsafe { &*Self::regs() });
+        }
+
+        #[inline(always)]
+        fn set_trigger(src: u8) {
+            hw::set_trigger(unsafe { &*Self::regs() }, src);
+        }
+
+        #[inline(always)]
+        fn eoc_sr() -> bool {
+            hw::eoc_sr(unsafe { &*Self::regs() })
         }
 
         #[inline(always)]
