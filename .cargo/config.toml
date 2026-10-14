@@ -6,3 +6,6 @@ rustflags = [
     "-C", "link-arg=--nmagic",
     "-C", "link-arg=-Tlink.x",
 ]
+# `cargo run` flashes the firmware with probe-rs and attaches RTT so the
+# `rprintln!` output from the examples shows up in the terminal.
+runner = "probe-rs run --chip swm341 --rtt"
