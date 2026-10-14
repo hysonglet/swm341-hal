@@ -29,6 +29,8 @@ embassy-time-driver = { version = "0.2", optional = true }
 embassy-executor = { version = "0.7", features = ["arch-cortex-m", "executor-thread"] }
 embassy-time = { version = "0.4", features = ["tick-hz-1_000"] }
 panic-halt = "0.2"
+rtt-target = "0.5"
+cortex-m-rt = { version = "0.7.3", features = ["device"] }
 
 [features]
 default = ["embassy"]
@@ -97,6 +99,9 @@ required-features = ["embassy"]
 [[example]]
 name = "embassy_adc"
 required-features = ["embassy"]
+
+[[example]]
+name = "hello_rtt"
 
 [profile.release]
 codegen-units = 1
