@@ -64,13 +64,7 @@ pub(crate) mod sealed {
             // `clock()` tells us which converter this is: `SYS.CLKSEL` carries an
             // independent `AD0/AD0DIV` and `AD1/AD1DIV` pair, so bringing one up
             // must not touch the other's fields.
-            let sys = unsafe { &*crate::pac::SYS::ptr() };
-            sys.clksel.modify(|_, w| unsafe {
-                match Self::clock() {
-                    PeripheralClockIndex::Adc1 => w.ad1().bits(0).ad1div().bits(3),
-                    _ => w.ad0().bits(0).ad0div().bits(3),
-                }
-            });
+            Self::clock().open(); 
 
             // 1. Reset the digital core.
             regs.cr.modify(|_, w| w.reset().set_bit());
