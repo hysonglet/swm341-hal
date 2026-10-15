@@ -57,6 +57,7 @@ pub mod btimr;
 pub mod sdio;
 pub mod dma2d;
 pub mod jpeg;
+pub mod lcdc;
 
 #[doc(hidden)]
 pub mod vector_table;
@@ -68,7 +69,7 @@ pub use mcu::Peripherals;
 pub use mcu::serial::{Can0, Can1, I2c0, I2c1, Spi0, Spi1, Uart0, Uart1, Uart2, Uart3};
 pub use mcu::devices::{
     Adc0, Adc1, Btimr0, Btimr1, Btimr2, Btimr3, Btimr4, Btimr5, Btimr6, Btimr7, Btimr8, Btimr9,
-    Btimr10, Btimr11, Cordic, Dac, Dma, Div, Dma2d, Hall, Jpeg, Pwm0, Pwm1, Pwm2, Pwm3, Pwm4, Rtc,
+    Btimr10, Btimr11, Cordic, Dac, Dma, Div, Dma2d, Hall, Jpeg, Lcd, Pwm0, Pwm1, Pwm2, Pwm3, Pwm4, Rtc,
     Sdio, Timr0, Timr1, Timr2, Timr3, Timr4, Wdt,
 };
 
@@ -244,6 +245,10 @@ impl Peripherals {
     /// Take the JPEG singleton.
     pub fn jpeg(&self) -> Jpeg {
         unsafe { Jpeg::steal() }
+    }
+    /// Take the TFT LCD controller singleton.
+    pub fn lcd(&self) -> Lcd {
+        unsafe { Lcd::steal() }
     }
     /// Take the DAC singleton.
     pub fn dac(&self) -> Dac {

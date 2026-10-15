@@ -59,6 +59,8 @@ pub mod devices {
         Dma2d,
         // JPEG decoder.
         Jpeg,
+        // TFT LCD controller.
+        Lcd,
         // 12-bit digital-to-analog converter.
         Dac,
     );
