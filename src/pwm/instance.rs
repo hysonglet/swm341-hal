@@ -2,7 +2,8 @@
 //!
 //! All five PWM instances (`PWM0..PWM4`) share the `pac::pwm0::RegisterBlock`
 //! type -- `PWM1..PWM4` are `pub use pwm0 as pwmN` aliases in the PAC -- so a
-//! single non-generic [`hw`] implementation serves every instance. The only
+//! single set of register-access default methods on `sealed::Instance` serves
+//! every instance. The only
 //! per-instance data are the register-block pointer, the (shared) clock gate, the
 //! async index and the NVIC vector, forwarded by [`sealed::Instance`].
 //!
@@ -19,70 +20,17 @@ use crate::pac;
 /// The register-block type shared by every PWM instance on the SWM341.
 pub(crate) type Block = pac::pwm0::RegisterBlock;
 
-/// Register access shared by every PWM instance.
-pub(crate) mod hw {
-    use super::Block;
-
-    /// Set the counter top (`PERIOD`).
-    pub(crate) fn set_period(regs: &Block, period: u32) {
-        regs.period.write(|w| unsafe { w.bits(period) });
-    }
-
-    /// Set the `A` channel compare value (`CMPA`, the duty cycle).
-    pub(crate) fn set_duty_a(regs: &Block, duty: u32) {
-        regs.cmpa.write(|w| unsafe { w.bits(duty) });
-    }
-
-    /// Set the `B` channel compare value (`CMPB`, the duty cycle).
-    pub(crate) fn set_duty_b(regs: &Block, duty: u32) {
-        regs.cmpb.write(|w| unsafe { w.bits(duty) });
-    }
-
-    /// Select the clock source and divider in `CR` (run mode is applied by
-    /// [`start`](super::super::Pwm::start)/[`stop`](super::super::Pwm::stop)).
-    pub(crate) fn configure_clock(regs: &Block, clksrc: u8, clkdiv: u8) {
-        regs.cr
-            .write(|w| unsafe { w.clksrc().bits(clksrc as u8).clkdiv().bits(clkdiv as u16) });
-    }
-
-    /// Force the `A` output idle level low and non-inverted (a sane default).
-    pub(crate) fn configure_output(regs: &Block) {
-        regs.ocr
-            .write(|w| w.idlea().bit(false).inva().bit(false));
-    }
-
-    /// Set the run mode in `CR` (`1` runs, `0` stops).
-    pub(crate) fn set_mode(regs: &Block, mode: u8) {
-        regs.cr.modify(|_, w| unsafe { w.mode().bits(mode) });
-    }
-
-    /// True once a counter period has elapsed since the last clear.
-    pub(crate) fn overflow_flag(regs: &Block) -> bool {
-        regs.if_.read().upovf().bit()
-    }
-
-    /// Clear the period-elapsed flag (the `IF` flags are write-1-to-clear).
-    pub(crate) fn clear_overflow(regs: &Block) {
-        regs.if_.write(|w| w.upovf().set_bit());
-    }
-
-    /// Enable or disable the period-elapsed interrupt.
-    pub(crate) fn set_overflow_irq(regs: &Block, enable: bool) {
-        regs.ie.modify(|_, w| w.upovf().bit(enable));
-    }
-}
-
 pub(crate) mod sealed {
     use cortex_m::peripheral::NVIC;
 
-    use super::{hw, Block, PeripheralClockIndex};
+    use super::{Block, PeripheralClockIndex};
     use cortex_m::interrupt::InterruptNumber;
 
     /// A PWM peripheral the driver can talk to.
     ///
     /// Implemented for the singletons in [`crate::mcu`]. The only per-instance
     /// data are the register-block pointer, clock gate, async index and NVIC
-    /// vector; every register operation is forwarded to [`super::hw`].
+    /// vector; all register access lives in the default methods of this trait.
     pub trait Instance {
         /// Clock gate that powers this peripheral (shared across PWM0..PWM4).
         fn clock() -> PeripheralClockIndex;
@@ -98,49 +46,70 @@ pub(crate) mod sealed {
             unsafe { NVIC::unmask(Self::irq()) };
         }
 
+        /// Set the counter top (`PERIOD`).
         #[inline(always)]
         fn set_period(period: u32) {
-            hw::set_period(unsafe { &*Self::regs() }, period);
+            let regs = unsafe { &*Self::regs() };
+            regs.period.write(|w| unsafe { w.bits(period) });
         }
 
+        /// Set the `A` channel compare value (`CMPA`, the duty cycle).
         #[inline(always)]
         fn set_duty_a(duty: u32) {
-            hw::set_duty_a(unsafe { &*Self::regs() }, duty);
+            let regs = unsafe { &*Self::regs() };
+            regs.cmpa.write(|w| unsafe { w.bits(duty) });
         }
 
+        /// Set the `B` channel compare value (`CMPB`, the duty cycle).
         #[inline(always)]
         fn set_duty_b(duty: u32) {
-            hw::set_duty_b(unsafe { &*Self::regs() }, duty);
+            let regs = unsafe { &*Self::regs() };
+            regs.cmpb.write(|w| unsafe { w.bits(duty) });
         }
 
+        /// Select the clock source and divider in `CR` (run mode is applied by
+        /// [`start`](super::super::Pwm::start)/[`stop`](super::super::Pwm::stop)).
         #[inline(always)]
         fn configure_clock(clksrc: u8, clkdiv: u8) {
-            hw::configure_clock(unsafe { &*Self::regs() }, clksrc, clkdiv);
+            let regs = unsafe { &*Self::regs() };
+            regs.cr
+                .write(|w| unsafe { w.clksrc().bits(clksrc as u8).clkdiv().bits(clkdiv as u16) });
         }
 
+        /// Force the `A` output idle level low and non-inverted (a sane default).
         #[inline(always)]
         fn configure_output() {
-            hw::configure_output(unsafe { &*Self::regs() });
+            let regs = unsafe { &*Self::regs() };
+            regs.ocr
+                .write(|w| w.idlea().bit(false).inva().bit(false));
         }
 
+        /// Set the run mode in `CR` (`1` runs, `0` stops).
         #[inline(always)]
         fn set_mode(mode: u8) {
-            hw::set_mode(unsafe { &*Self::regs() }, mode);
+            let regs = unsafe { &*Self::regs() };
+            regs.cr.modify(|_, w| unsafe { w.mode().bits(mode) });
         }
 
+        /// True once a counter period has elapsed since the last clear.
         #[inline(always)]
         fn overflow_flag() -> bool {
-            hw::overflow_flag(unsafe { &*Self::regs() })
+            let regs = unsafe { &*Self::regs() };
+            regs.if_.read().upovf().bit()
         }
 
+        /// Clear the period-elapsed flag (the `IF` flags are write-1-to-clear).
         #[inline(always)]
         fn clear_overflow() {
-            hw::clear_overflow(unsafe { &*Self::regs() });
+            let regs = unsafe { &*Self::regs() };
+            regs.if_.write(|w| w.upovf().set_bit());
         }
 
+        /// Enable or disable the period-elapsed interrupt.
         #[inline(always)]
         fn set_overflow_irq(enable: bool) {
-            hw::set_overflow_irq(unsafe { &*Self::regs() }, enable);
+            let regs = unsafe { &*Self::regs() };
+            regs.ie.modify(|_, w| w.upovf().bit(enable));
         }
     }
 }
