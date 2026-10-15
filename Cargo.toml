@@ -101,6 +101,13 @@ name = "embassy_adc"
 required-features = ["embassy"]
 
 [[example]]
+name = "embassy_uart"
+required-features = ["embassy"]
+
+[[example]]
+name = "clock_block"
+
+[[example]]
 name = "hello_rtt"
 
 [profile.release]
