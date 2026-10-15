@@ -34,77 +34,10 @@ macro_rules! with_dma_ch {
     };
 }
 
-/// Register access shared by every DMA instance.
-pub(crate) mod hw {
-    use super::Block;
-
-    pub(crate) fn enable(_regs: &Block) {}
-    pub(crate) fn disable(_regs: &Block) {}
-
-    /// Program one channel: source/destination addresses, length and (optional)
-    /// handshake request number. `req == None` selects a software-triggered
-    /// memory-to-memory transfer.
-    pub(crate) fn configure_channel(
-        regs: &Block,
-        ch: u8,
-        src: u32,
-        dst: u32,
-        len: u32,
-        req: Option<u8>,
-    ) {
-        with_dma_ch!(regs, ch, |c| {
-            c.cr
-                .write(|w| unsafe { w.len().bits(len).rxen().set_bit().txen().set_bit() });
-            c.src.write(|w| unsafe { w.bits(src) });
-            c.dst.write(|w| unsafe { w.bits(dst) });
-            match req {
-                Some(num) => c
-                    .mux
-                    .write(|w| unsafe { w.srchsen().set_bit().srchssig().bits(num) }),
-                None => c
-                    .mux
-                    .write(|w| unsafe { w.srchsen().clear_bit().srchssig().bits(0) }),
-            }
-        });
-    }
-
-    /// Arm (start) a channel.
-    pub(crate) fn enable_channel(regs: &Block, ch: u8) {
-        let cur = regs.en.read().bits();
-        regs.en.write(|w| unsafe { w.bits(cur | (1u32 << ch)) });
-    }
-
-    /// Disarm a channel.
-    pub(crate) fn disable_channel(regs: &Block, ch: u8) {
-        let cur = regs.en.read().bits();
-        regs.en.write(|w| unsafe { w.bits(cur & !(1u32 << ch)) });
-    }
-
-    /// `true` once channel `ch` raised its transfer-complete flag.
-    pub(crate) fn channel_done(regs: &Block, ch: u8) -> bool {
-        match ch {
-            0 => regs.if_.read().ch0().bit_is_set(),
-            1 => regs.if_.read().ch1().bit_is_set(),
-            2 => regs.if_.read().ch2().bit_is_set(),
-            _ => regs.if_.read().ch3().bit_is_set(),
-        }
-    }
-
-    /// Clear channel `ch`'s transfer-complete flag (write 1 to clear).
-    pub(crate) fn clear_channel_done(regs: &Block, ch: u8) {
-        match ch {
-            0 => regs.if_.write(|w| w.ch0().set_bit()),
-            1 => regs.if_.write(|w| w.ch1().set_bit()),
-            2 => regs.if_.write(|w| w.ch2().set_bit()),
-            _ => regs.if_.write(|w| w.ch3().set_bit()),
-        }
-    }
-}
-
 pub(crate) mod sealed {
     use cortex_m::peripheral::NVIC;
 
-    use super::{hw, Block, PeripheralClockIndex};
+    use super::{Block, PeripheralClockIndex};
     use crate::pac;
 
     /// A DMA peripheral the driver can talk to.
@@ -120,32 +53,64 @@ pub(crate) mod sealed {
         }
 
         #[inline(always)]
-        fn enable() {
-            hw::enable(unsafe { &*Self::regs() });
-        }
+        fn enable() {}
+
         #[inline(always)]
-        fn disable() {
-            hw::disable(unsafe { &*Self::regs() });
-        }
+        fn disable() {}
+
         #[inline(always)]
         fn configure_channel(ch: u8, src: u32, dst: u32, len: u32, req: Option<u8>) {
-            hw::configure_channel(unsafe { &*Self::regs() }, ch, src, dst, len, req);
+            let regs = unsafe { &*Self::regs() };
+            with_dma_ch!(regs, ch, |c| {
+                c.cr
+                    .write(|w| unsafe { w.len().bits(len).rxen().set_bit().txen().set_bit() });
+                c.src.write(|w| unsafe { w.bits(src) });
+                c.dst.write(|w| unsafe { w.bits(dst) });
+                match req {
+                    Some(num) => c
+                        .mux
+                        .write(|w| unsafe { w.srchsen().set_bit().srchssig().bits(num) }),
+                    None => c
+                        .mux
+                        .write(|w| unsafe { w.srchsen().clear_bit().srchssig().bits(0) }),
+                }
+            });
         }
+
         #[inline(always)]
         fn enable_channel(ch: u8) {
-            hw::enable_channel(unsafe { &*Self::regs() }, ch);
+            let regs = unsafe { &*Self::regs() };
+            let cur = regs.en.read().bits();
+            regs.en.write(|w| unsafe { w.bits(cur | (1u32 << ch)) });
         }
+
         #[inline(always)]
         fn disable_channel(ch: u8) {
-            hw::disable_channel(unsafe { &*Self::regs() }, ch);
+            let regs = unsafe { &*Self::regs() };
+            let cur = regs.en.read().bits();
+            regs.en.write(|w| unsafe { w.bits(cur & !(1u32 << ch)) });
         }
+
         #[inline(always)]
         fn channel_done(ch: u8) -> bool {
-            hw::channel_done(unsafe { &*Self::regs() }, ch)
+            let regs = unsafe { &*Self::regs() };
+            match ch {
+                0 => regs.if_.read().ch0().bit_is_set(),
+                1 => regs.if_.read().ch1().bit_is_set(),
+                2 => regs.if_.read().ch2().bit_is_set(),
+                _ => regs.if_.read().ch3().bit_is_set(),
+            }
         }
+
         #[inline(always)]
         fn clear_channel_done(ch: u8) {
-            hw::clear_channel_done(unsafe { &*Self::regs() }, ch);
+            let regs = unsafe { &*Self::regs() };
+            match ch {
+                0 => regs.if_.write(|w| w.ch0().set_bit()),
+                1 => regs.if_.write(|w| w.ch1().set_bit()),
+                2 => regs.if_.write(|w| w.ch2().set_bit()),
+                _ => regs.if_.write(|w| w.ch3().set_bit()),
+            }
         }
     }
 }
