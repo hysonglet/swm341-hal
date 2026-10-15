@@ -23,91 +23,17 @@ use crate::pac;
 /// so no pointer cast is ever needed — the four singletons agree on layout.
 pub(crate) type Block = pac::uart0::RegisterBlock;
 
-/// Register access shared by every UART instance.
-///
-/// Each function is non-generic (it takes the common [`Block`] type), so the
-/// compiler emits its body exactly once regardless of how many UARTs exist.
-pub(crate) mod hw {
-    use super::Block;
-
-    pub(crate) fn enable(regs: &Block) {
-        regs.ctrl.modify(|_, w| w.en().bit(true));
-    }
-
-    pub(crate) fn disable(regs: &Block) {
-        regs.ctrl.modify(|_, w| w.en().bit(false));
-    }
-
-    pub(crate) fn configure_line(regs: &Block, data9: bool, parity_code: u8, stop2: bool) {
-        regs.ctrl.modify(|_, w| unsafe {
-            w.data9b().bit(data9);
-            w.parity().bits(parity_code);
-            w.stop2b().bits(stop2 as u8);
-            w.en().bit(true)
-        });
-    }
-
-    pub(crate) fn set_baudrate(regs: &Block, baudrate: u32) {
-        let clk =
-            crate::clock::current_system_clock().expect("peripheral clock not running") as u32;
-        // BAUD = (clk / rate - 1) / 16, FRAC = (clk / rate - 1) % 16, so the
-        // realised rate is clk / ((BAUD * 16) + FRAC + 1).
-        let step = (clk / baudrate.max(1)).saturating_sub(1);
-        regs.baud.write(|w| unsafe {
-            w.baud().bits((step / 16) as u16);
-            w.frac().bits((step % 16) as u8)
-        });
-    }
-
-    pub(crate) fn configure_fifo(regs: &Block, rx_thr: u8, tx_thr: u8) {
-        regs.fifo
-            .modify(|_, w| unsafe { w.rxthr().bits(rx_thr).txthr().bits(tx_thr) });
-        // Receiver timeout resets the line-idle accounting after each byte.
-        regs.tocr.modify(|_, w| w.mode().bit(true));
-    }
-
-    pub(crate) fn write_data(regs: &Block, byte: u8) {
-        regs.data.write(|w| unsafe { w.bits(byte as u32) });
-    }
-
-    pub(crate) fn read_data(regs: &Block) -> (u8, bool) {
-        let r = regs.data.read();
-        (r.data().bits() as u8, r.paerr().bit())
-    }
-
-    pub(crate) fn is_tx_fifo_full(regs: &Block) -> bool {
-        regs.ctrl.read().txff().bit()
-    }
-
-    pub(crate) fn is_rx_not_empty(regs: &Block) -> bool {
-        regs.ctrl.read().rxne().bit()
-    }
-
-    pub(crate) fn is_tx_idle(regs: &Block) -> bool {
-        regs.ctrl.read().txidle().bit()
-    }
-
-    pub(crate) fn set_rxie(regs: &Block, enable: bool) {
-        regs.ctrl.modify(|_, w| w.rxie().bit(enable));
-    }
-
-    pub(crate) fn set_txie(regs: &Block, enable: bool) {
-        regs.ctrl.modify(|_, w| w.txie().bit(enable));
-    }
-}
-
 pub(crate) mod sealed {
     use cortex_m::peripheral::NVIC;
 
-    use super::{hw, Block, PeripheralClockIndex};
+    use super::{Block, PeripheralClockIndex};
     use crate::pac;
 
     /// A UART peripheral the driver can talk to.
     ///
     /// Implemented for the singletons in [`crate::mcu`]. The only per-instance
     /// data are the register-block pointer, clock gate, async index and NVIC
-    /// vector; every register operation is forwarded to [`super::hw`], which
-    /// holds a single shared implementation.
+    /// vector; all register access lives in the default methods of this trait.
     pub trait Instance {
         /// Clock gate that powers this peripheral.
         fn clock() -> PeripheralClockIndex;
@@ -118,10 +44,6 @@ pub(crate) mod sealed {
         /// Pointer to this instance's register block (always a `uart0::RegisterBlock`).
         fn regs() -> *const Block;
 
-        // -- thin forwards to the shared implementation in `hw` --
-        // Marked `#[inline(always)]` so they collapse into the single `hw`
-        // body at every call site rather than duplicating it per UART.
-
         #[inline(always)]
         fn unmask_irq() {
             unsafe { NVIC::unmask(Self::irq()) };
@@ -129,62 +51,91 @@ pub(crate) mod sealed {
 
         #[inline(always)]
         fn enable() {
-            hw::enable(unsafe { &*Self::regs() });
+            let regs = unsafe { &*Self::regs() };
+            regs.ctrl.modify(|_, w| w.en().bit(true));
         }
 
         #[inline(always)]
         fn disable() {
-            hw::disable(unsafe { &*Self::regs() });
+            let regs = unsafe { &*Self::regs() };
+            regs.ctrl.modify(|_, w| w.en().bit(false));
         }
 
         #[inline(always)]
         fn configure_line(data9: bool, parity_code: u8, stop2: bool) {
-            hw::configure_line(unsafe { &*Self::regs() }, data9, parity_code, stop2);
+            let regs = unsafe { &*Self::regs() };
+            regs.ctrl.modify(|_, w| unsafe {
+                w.data9b().bit(data9);
+                w.parity().bits(parity_code);
+                w.stop2b().bits(stop2 as u8);
+                w.en().bit(true)
+            });
         }
 
         #[inline(always)]
         fn set_baudrate(baudrate: u32) {
-            hw::set_baudrate(unsafe { &*Self::regs() }, baudrate);
+            let regs = unsafe { &*Self::regs() };
+            let clk =
+                crate::clock::current_system_clock().expect("peripheral clock not running") as u32;
+            // BAUD = (clk / rate - 1) / 16, FRAC = (clk / rate - 1) % 16, so the
+            // realised rate is clk / ((BAUD * 16) + FRAC + 1).
+            let step = (clk / baudrate.max(1)).saturating_sub(1);
+            regs.baud.write(|w| unsafe {
+                w.baud().bits((step / 16) as u16);
+                w.frac().bits((step % 16) as u8)
+            });
         }
 
         #[inline(always)]
         fn configure_fifo(rx_thr: u8, tx_thr: u8) {
-            hw::configure_fifo(unsafe { &*Self::regs() }, rx_thr, tx_thr);
+            let regs = unsafe { &*Self::regs() };
+            regs.fifo
+                .modify(|_, w| unsafe { w.rxthr().bits(rx_thr).txthr().bits(tx_thr) });
+            // Receiver timeout resets the line-idle accounting after each byte.
+            regs.tocr.modify(|_, w| w.mode().bit(true));
         }
 
         #[inline(always)]
         fn write_data(byte: u8) {
-            hw::write_data(unsafe { &*Self::regs() }, byte);
+            let regs = unsafe { &*Self::regs() };
+            regs.data.write(|w| unsafe { w.bits(byte as u32) });
         }
 
         #[inline(always)]
         fn read_data() -> (u8, bool) {
-            hw::read_data(unsafe { &*Self::regs() })
+            let regs = unsafe { &*Self::regs() };
+            let r = regs.data.read();
+            (r.data().bits() as u8, r.paerr().bit())
         }
 
         #[inline(always)]
         fn is_tx_fifo_full() -> bool {
-            hw::is_tx_fifo_full(unsafe { &*Self::regs() })
+            let regs = unsafe { &*Self::regs() };
+            regs.ctrl.read().txff().bit()
         }
 
         #[inline(always)]
         fn is_rx_not_empty() -> bool {
-            hw::is_rx_not_empty(unsafe { &*Self::regs() })
+            let regs = unsafe { &*Self::regs() };
+            regs.ctrl.read().rxne().bit()
         }
 
         #[inline(always)]
         fn is_tx_idle() -> bool {
-            hw::is_tx_idle(unsafe { &*Self::regs() })
+            let regs = unsafe { &*Self::regs() };
+            regs.ctrl.read().txidle().bit()
         }
 
         #[inline(always)]
         fn set_rxie(enable: bool) {
-            hw::set_rxie(unsafe { &*Self::regs() }, enable);
+            let regs = unsafe { &*Self::regs() };
+            regs.ctrl.modify(|_, w| w.rxie().bit(enable));
         }
 
         #[inline(always)]
         fn set_txie(enable: bool) {
-            hw::set_txie(unsafe { &*Self::regs() }, enable);
+            let regs = unsafe { &*Self::regs() };
+            regs.ctrl.modify(|_, w| w.txie().bit(enable));
         }
     }
 }
