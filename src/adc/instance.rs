@@ -31,12 +31,21 @@ pub(crate) mod hw {
     /// Skipping the reset/calibration (or running the ADC clock at full speed)
     /// leaves the SAR state machine unable to finish a conversion, so the EOC
     /// flag never latches and a blocking read spins forever.
-    pub(crate) fn enable(regs: &Block) {
+    ///
+    /// `adc1` picks the clock divider to program: `SYS.CLKSEL` carries an
+    /// independent `AD0/AD0DIV` and `AD1/AD1DIV` pair, so configuring ADC1 must
+    /// not touch the ADC0 fields.
+    pub(crate) fn enable(regs: &Block, adc1: bool) {
         // Select HRC / 8 as the ADC clock so the converter runs within spec
         // (the reset default of AD0DIV = 0 would clock it at the full 150 MHz).
         let sys = unsafe { &*crate::pac::SYS::ptr() };
-        sys.clksel
-            .modify(|_, w| unsafe { w.ad0().bits(0).ad0div().bits(3) });
+        sys.clksel.modify(|_, w| unsafe {
+            if adc1 {
+                w.ad1().bits(0).ad1div().bits(3)
+            } else {
+                w.ad0().bits(0).ad0div().bits(3)
+            }
+        });
 
         // 1. Reset the digital core.
         regs.cr.modify(|_, w| w.reset().set_bit());
@@ -46,8 +55,7 @@ pub(crate) mod hw {
         regs.cr.modify(|_, w| w.reset().clear_bit());
 
         // 2. Clear the conversion FIFO.
-        regs.cr.modify(|_, w| unsafe { w.ffclr().bits(0xF) });
-        regs.cr.modify(|_, w| unsafe { w.ffclr().bits(0) });
+        flush_fifo(regs);
 
         // 3. No averaging, no interrupts; clear every pending flag.
         regs.cr.modify(|_, w| unsafe { w.avg().bits(0) });
@@ -123,9 +131,34 @@ pub(crate) mod hw {
         regs.go.read().busy().bit()
     }
 
-    /// 12-bit conversion result of sequence 0 (`SEQ0.DR.VALUE`).
-    pub(crate) fn result(regs: &Block) -> u16 {
-        regs.seq0.dr.read().value().bits()
+    /// Drop every result currently sitting in sequence 0's FIFO.
+    ///
+    /// `CR.FFCLR` is a pulse register (one bit per sequence); bit 0 covers
+    /// sequence 0. Used before arming a conversion so a leftover entry -- e.g.
+    /// from an async conversion that was cancelled after it had already started
+    /// -- cannot be mistaken for the new result.
+    pub(crate) fn flush_fifo(regs: &Block) {
+        regs.cr.modify(|_, w| unsafe { w.ffclr().bits(0x1) });
+        regs.cr.modify(|_, w| unsafe { w.ffclr().bits(0) });
+    }
+
+    /// True when sequence 0's FIFO holds at least one result (`!SEQ0.SR.EMPTY`).
+    ///
+    /// This is the flag the vendor library polls (`ADC_DataAvailable`). Unlike
+    /// `SR.EOC` it is not sticky, so polling it needs no "wait for the start to
+    /// clear the previous flag" delay.
+    pub(crate) fn data_available(regs: &Block) -> bool {
+        !regs.seq0.sr.read().empty().bit()
+    }
+
+    /// Conversion result of sequence 0 together with the channel that produced
+    /// it (`SEQ0.DR.CHNUM` / `SEQ0.DR.VALUE`).
+    ///
+    /// The hardware tags every FIFO entry with its channel, so callers must
+    /// check it: a sequence can legitimately hold results of several channels.
+    pub(crate) fn result(regs: &Block) -> (u8, u16) {
+        let dr = regs.seq0.dr.read();
+        (dr.chnum().bits(), dr.value().bits())
     }
 
     /// True once sequence 0 has finished (`IF.SEQ0EOC`).
@@ -164,6 +197,11 @@ pub(crate) mod sealed {
         fn irq() -> impl InterruptNumber;
         /// Pointer to this instance's register block (always an `adc0::RegisterBlock`).
         fn regs() -> *const Block;
+        /// Which of the two converters this is.
+        ///
+        /// `SYS.CLKSEL` holds an independent `AD0/AD0DIV` and `AD1/AD1DIV` pair,
+        /// so bringing up one ADC must not reprogram the other's clock.
+        fn is_adc1() -> bool;
 
         #[inline(always)]
         fn unmask_irq() {
@@ -172,7 +210,7 @@ pub(crate) mod sealed {
 
         #[inline(always)]
         fn enable() {
-            hw::enable(unsafe { &*Self::regs() });
+            hw::enable(unsafe { &*Self::regs() }, Self::is_adc1());
         }
 
         #[inline(always)]
@@ -195,6 +233,18 @@ pub(crate) mod sealed {
             hw::select_channel(unsafe { &*Self::regs() }, channel);
         }
 
+        /// Discard any result left in sequence 0's FIFO.
+        #[inline(always)]
+        fn flush_fifo() {
+            hw::flush_fifo(unsafe { &*Self::regs() });
+        }
+
+        /// True when sequence 0's FIFO holds at least one result.
+        #[inline(always)]
+        fn data_available() -> bool {
+            hw::data_available(unsafe { &*Self::regs() })
+        }
+
         #[inline(always)]
         fn start_conversion() {
             hw::start_conversion(unsafe { &*Self::regs() });
@@ -205,8 +255,9 @@ pub(crate) mod sealed {
             hw::busy(unsafe { &*Self::regs() })
         }
 
+        /// Pop the next result of sequence 0 as `(channel, value)`.
         #[inline(always)]
-        fn result() -> u16 {
+        fn result() -> (u8, u16) {
             hw::result(unsafe { &*Self::regs() })
         }
 
@@ -236,7 +287,7 @@ pub trait Instance: sealed::Instance {}
 /// `ADC0` and `ADC1` differ in their clock gate and NVIC vector, so both are
 /// passed in explicitly.
 macro_rules! impl_adc_instance {
-    ($ty:ty, $pac:ident, $clock:expr, $irq:expr, $index:literal) => {
+    ($ty:ty, $pac:ident, $clock:expr, $irq:expr, $index:literal, $adc1:literal) => {
         impl sealed::Instance for $ty {
             #[inline]
             fn clock() -> PeripheralClockIndex {
@@ -257,6 +308,11 @@ macro_rules! impl_adc_instance {
             fn regs() -> *const Block {
                 pac::$pac::PTR
             }
+
+            #[inline]
+            fn is_adc1() -> bool {
+                $adc1
+            }
         }
 
         impl Instance for $ty {}
@@ -268,14 +324,16 @@ impl_adc_instance!(
     ADC0,
     PeripheralClockIndex::Adc0,
     crate::interrupt::ADC0,
-    0
+    0,
+    false
 );
 impl_adc_instance!(
     crate::Adc1,
     ADC1,
     PeripheralClockIndex::Adc1,
     crate::interrupt::ADC1,
-    1
+    1,
+    true
 );
 
 /// Number of ADC instances, used to size the async state arrays.

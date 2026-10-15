@@ -100,22 +100,55 @@ pub struct Adc<'d, T: Instance, M: Mode = Blocking> {
 }
 
 impl<'d, T: Instance, M: Mode> Adc<'d, T, M> {
-    /// Synchronously convert `channel` and return the 12-bit result.
-    pub fn read(&self, channel: u8) -> u16 {
+    /// Synchronously convert `channel`, reporting why it failed if it did.
+    ///
+    /// The sequence FIFO is flushed before arming, so the entry that is read
+    /// back belongs to this conversion -- and the channel the hardware tags it
+    /// with (`DR.CHNUM`) is checked against `channel`. Prefer this over
+    /// [`read`](Self::read) wherever a wrong-channel sample must never be acted
+    /// on silently.
+    pub fn try_read(&self, channel: u8) -> Result<u16, Error> {
+        if channel >= CHANNEL_COUNT {
+            // `SEQCHN0.SEQ0` is a 12-bit mask: an out-of-range channel would
+            // select no channel at all and the conversion never completes.
+            return Err(Error::InvalidChannel);
+        }
+
         T::clear_eoc();
+        // Drop anything a previous (possibly cancelled) conversion left behind.
+        T::flush_fifo();
         T::select_channel(channel);
         T::start_conversion();
-        // Starting a conversion clears the previously latched EOC; wait a few
-        // cycles before polling so we don't read the stale flag.
-        for _ in 0..16 {
+
+        // `SR.EMPTY` tracks the FIFO and is not sticky, so unlike `SR.EOC` it
+        // needs no "wait for the start to clear the old flag" delay.
+        while !T::data_available() {
             nop();
         }
-        while !T::eoc_sr() {
-            // Spin until the conversion completes (EOC latches in SEQ0.SR).
+
+        let (got, value) = T::result();
+        if got != channel {
+            return Err(Error::ChannelMismatch {
+                expected: channel,
+                got,
+            });
         }
-        let value = T::result();
         T::clear_eoc();
-        value
+        Ok(value)
+    }
+
+    /// Synchronously convert `channel` and return the 12-bit result.
+    ///
+    /// Panics if the sample turned out to come from a different channel; see
+    /// [`try_read`](Self::try_read) for the fallible variant.
+    pub fn read(&self, channel: u8) -> u16 {
+        match self.try_read(channel) {
+            Ok(value) => value,
+            Err(Error::InvalidChannel) => panic!("adc: channel out of range"),
+            Err(Error::ChannelMismatch { expected, got }) => {
+                panic!("adc: result came from channel {got}, expected {expected}")
+            }
+        }
     }
 
     /// Route `pin` to the analog mux and return an [`AdcInput`] describing it.
@@ -125,12 +158,23 @@ impl<'d, T: Instance, M: Mode> Adc<'d, T, M> {
     /// `PORTx.FUNC` (code `15`) and records the channel for later reads.
     pub fn add_pin<P: AdcPin<T>>(&mut self, pin: impl Peripheral<P = P> + 'd) -> AdcInput<'d, T, P> {
         let flex = crate::gpio::Flex::new(pin);
+        // Float the pad: a leftover pull resistor biases the sample. The vendor
+        // samples do the same (`PORT_Init(..., 0)` -- last arg = pull off).
+        crate::gpio::set_pull::<P>(crate::gpio::Pull::None);
         crate::gpio::set_function::<P>(P::FUNC);
         AdcInput {
             _flex: flex,
             channel: P::CHANNEL,
             _adc: PhantomData,
         }
+    }
+
+    /// Synchronously convert the channel behind `input`, reporting failures.
+    pub fn try_read_input<P: AdcPin<T>>(
+        &self,
+        input: &AdcInput<'_, T, P>,
+    ) -> Result<u16, Error> {
+        self.try_read(input.channel)
     }
 
     /// Synchronously convert the channel behind `input` and return its value.
@@ -192,7 +236,26 @@ impl<'d, T: Instance> Adc<'d, T, Async> {
     }
 
     /// Convert `channel`, awaiting the end-of-conversion interrupt.
-    pub async fn read_async(&self, channel: u8) -> u16 {
+    ///
+    /// Deliberately takes `&mut self`: the channel mask, the sequence FIFO and
+    /// the interrupt waker are all per-instance state, so two concurrent readers
+    /// would reprogram the channel under each other and then read whatever the
+    /// other one converted. `&mut self` makes that unrepresentable.
+    pub async fn try_read_async(&mut self, channel: u8) -> Result<u16, Error> {
         future::read_async::<T>(channel).await
+    }
+
+    /// Convert `channel`, awaiting the end-of-conversion interrupt.
+    ///
+    /// Panics if the sample turned out to come from a different channel; see
+    /// [`try_read_async`](Self::try_read_async) for the fallible variant.
+    pub async fn read_async(&mut self, channel: u8) -> u16 {
+        match self.try_read_async(channel).await {
+            Ok(value) => value,
+            Err(Error::InvalidChannel) => panic!("adc: channel out of range"),
+            Err(Error::ChannelMismatch { expected, got }) => {
+                panic!("adc: result came from channel {got}, expected {expected}")
+            }
+        }
     }
 }

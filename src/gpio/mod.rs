@@ -233,7 +233,7 @@ fn set_direction<P: Pin>(output: bool) {
 }
 
 #[inline(always)]
-fn set_pull<P: Pin>(pull: Pull) {
+pub(crate) fn set_pull<P: Pin>(pull: Pull) {
     <P as sealed::Pin>::Port::set_pull(P::number(), pull);
 }
 

@@ -14,7 +14,9 @@ async fn main(_spawner: Spawner) {
         clock: hal::clock::ClockConfig::hrc_150mhz(),
     });
 
-    let adc = hal::adc::Adc::new_async(p.adc0(), hal::adc::Config::default());
+    // `read_async` takes `&mut self`: the channel mask and the sequence FIFO are
+    // per-instance state, so concurrent readers would otherwise mix channels.
+    let mut adc = hal::adc::Adc::new_async(p.adc0(), hal::adc::Config::default());
     let sample = adc.read_async(0).await;
     let _ = sample;
 
