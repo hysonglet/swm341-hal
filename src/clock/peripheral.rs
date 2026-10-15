@@ -74,6 +74,7 @@ macro_rules! impl_clock_gates {
     ) => {
         impl PeripheralClockIndex {
             /// Set the peripheral's clock gate.
+            #[inline(always)]
             pub fn open(self) {
                 match self {
                     $( Self::$index => sys().$register.modify(|_, w| w.$field().set_bit()), )*
@@ -82,10 +83,21 @@ macro_rules! impl_clock_gates {
             }
 
             /// Clear the peripheral's clock gate.
+            #[inline(always)]
             pub fn close(self) {
                 match self {
                     $( Self::$index => sys().$register.modify(|_, w| w.$field().clear_bit()), )*
                     $( Self::$aon => {}, )*
+                }
+            }
+
+            // set or clear the peripheral's clock gate.
+            pub fn set(self, gate: bool) {
+                if gate {
+                    self.open()
+                }
+                else {
+                    self.close()
                 }
             }
         }
