@@ -66,62 +66,62 @@ impl<'d, T: Instance> Jpeg<'d, T, Blocking> {
 
     /// Point the decoder at the compressed bitstream (`CSBASE` + `CODLEN`).
     pub fn set_stream(&self, base: *const u8, len: u32) {
-        instance::hw::set_stream(unsafe { &*T::regs() }, base as u32, len);
+        T::set_stream(base as u32, len);
     }
 
     /// Point the decoder at the quantisation and Huffman tables.
     pub fn set_tables(&self, quant: *const u8, huffman: *const u8) {
-        instance::hw::set_tables(unsafe { &*T::regs() }, quant as u32, huffman as u32);
+        T::set_tables(quant as u32, huffman as u32);
     }
 
     /// Point the decoder at the planar Y/U/V output buffers.
     pub fn set_yuv_buffers(&self, y: *mut u8, u: *mut u8, v: *mut u8) {
-        instance::hw::set_yuv_buffers(unsafe { &*T::regs() }, y as u32, u as u32, v as u32);
+        T::set_yuv_buffers(y as u32, u as u32, v as u32);
     }
 
     /// Point the decoder at the packed RGB output buffer.
     pub fn set_rgb_buffer(&self, rgb: *mut u8) {
-        instance::hw::set_rgb_buffer(unsafe { &*T::regs() }, rgb as u32);
+        T::set_rgb_buffer(rgb as u32);
     }
 
     /// Set the output image size in pixels.
     pub fn set_image_size(&self, width: u16, height: u16) {
-        instance::hw::set_image_size(unsafe { &*T::regs() }, width, height);
+        T::set_image_size(width, height);
     }
 
     /// Set the output stride.
     pub fn set_stride(&self, stride: u32) {
-        instance::hw::set_stride(unsafe { &*T::regs() }, stride);
+        T::set_stride(stride);
     }
 
     /// Write the raw decoder configuration word (`CFG`).
     pub fn set_config(&self, config: u32) {
-        instance::hw::set_config(unsafe { &*T::regs() }, config);
+        T::set_config(config);
     }
 
     /// Soft-reset the decoder.
     pub fn reset(&self) {
-        instance::hw::reset(unsafe { &*T::regs() });
+        T::reset();
     }
 
     /// True while the decoder is busy.
     pub fn is_busy(&self) -> bool {
-        instance::hw::is_busy(unsafe { &*T::regs() })
+        T::is_busy()
     }
 
     /// True once the decode finished.
     pub fn is_done(&self) -> bool {
-        instance::hw::is_done(unsafe { &*T::regs() })
+        T::is_done()
     }
 
     /// True if the decode flagged an error.
     pub fn is_error(&self) -> bool {
-        instance::hw::is_error(unsafe { &*T::regs() })
+        T::is_error()
     }
 
     /// Clear the done / error flags.
     pub fn clear_flags(&self) {
-        instance::hw::clear_flags(unsafe { &*T::regs() });
+        T::clear_flags();
     }
 
     /// Decode one image synchronously.
@@ -129,23 +129,22 @@ impl<'d, T: Instance> Jpeg<'d, T, Blocking> {
     /// Configures the stream, tables, output buffers, size, stride and `CFG`, then
     /// starts the engine and busy-waits until it signals done or error.
     pub fn decode(&self, cfg: &DecodeConfig) -> Result<(), JpegError> {
-        let regs = unsafe { &*T::regs() };
-        instance::hw::set_stream(regs, cfg.code as u32, cfg.code_len);
-        instance::hw::set_tables(regs, cfg.quant_tables as u32, cfg.huffman_tables as u32);
-        instance::hw::set_yuv_buffers(regs, cfg.y as u32, cfg.u as u32, cfg.v as u32);
+        T::set_stream(cfg.code as u32, cfg.code_len);
+        T::set_tables(cfg.quant_tables as u32, cfg.huffman_tables as u32);
+        T::set_yuv_buffers(cfg.y as u32, cfg.u as u32, cfg.v as u32);
         if !cfg.rgb.is_null() {
-            instance::hw::set_rgb_buffer(regs, cfg.rgb as u32);
+            T::set_rgb_buffer(cfg.rgb as u32);
         }
-        instance::hw::set_image_size(regs, cfg.width, cfg.height);
-        instance::hw::set_stride(regs, cfg.stride);
-        instance::hw::set_config(regs, cfg.config);
-        instance::hw::clear_flags(regs);
-        instance::hw::start(regs);
-        while instance::hw::is_busy(regs) && !instance::hw::is_done(regs) {
+        T::set_image_size(cfg.width, cfg.height);
+        T::set_stride(cfg.stride);
+        T::set_config(cfg.config);
+        T::clear_flags();
+        T::start();
+        while T::is_busy() && !T::is_done() {
             core::hint::spin_loop();
         }
-        if instance::hw::is_error(regs) {
-            instance::hw::clear_flags(regs);
+        if T::is_error() {
+            T::clear_flags();
             return Err(JpegError::Decode);
         }
         Ok(())
