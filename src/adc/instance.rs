@@ -17,6 +17,7 @@ pub(crate) type Block = pac::adc0::RegisterBlock;
 /// Register access shared by every ADC instance.
 pub(crate) mod hw {
     use super::Block;
+    use crate::clock::PeripheralClockIndex;
     use cortex_m::asm::nop;
 
     /// Power on and configure the converter.
@@ -32,18 +33,17 @@ pub(crate) mod hw {
     /// leaves the SAR state machine unable to finish a conversion, so the EOC
     /// flag never latches and a blocking read spins forever.
     ///
-    /// `adc1` picks the clock divider to program: `SYS.CLKSEL` carries an
-    /// independent `AD0/AD0DIV` and `AD1/AD1DIV` pair, so configuring ADC1 must
-    /// not touch the ADC0 fields.
-    pub(crate) fn enable(regs: &Block, adc1: bool) {
+    /// `clock` picks the divider to program: `SYS.CLKSEL` carries an independent
+    /// `AD0/AD0DIV` and `AD1/AD1DIV` pair, so bringing up one ADC must not touch
+    /// the other's fields.
+    pub(crate) fn enable(regs: &Block, clock: PeripheralClockIndex) {
         // Select HRC / 8 as the ADC clock so the converter runs within spec
         // (the reset default of AD0DIV = 0 would clock it at the full 150 MHz).
         let sys = unsafe { &*crate::pac::SYS::ptr() };
         sys.clksel.modify(|_, w| unsafe {
-            if adc1 {
-                w.ad1().bits(0).ad1div().bits(3)
-            } else {
-                w.ad0().bits(0).ad0div().bits(3)
+            match clock {
+                PeripheralClockIndex::Adc1 => w.ad1().bits(0).ad1div().bits(3),
+                _ => w.ad0().bits(0).ad0div().bits(3),
             }
         });
 
@@ -197,12 +197,6 @@ pub(crate) mod sealed {
         fn irq() -> impl InterruptNumber;
         /// Pointer to this instance's register block (always an `adc0::RegisterBlock`).
         fn regs() -> *const Block;
-        /// Which of the two converters this is.
-        ///
-        /// `SYS.CLKSEL` holds an independent `AD0/AD0DIV` and `AD1/AD1DIV` pair,
-        /// so bringing up one ADC must not reprogram the other's clock.
-        fn is_adc1() -> bool;
-
         #[inline(always)]
         fn unmask_irq() {
             unsafe { NVIC::unmask(Self::irq()) };
@@ -210,7 +204,10 @@ pub(crate) mod sealed {
 
         #[inline(always)]
         fn enable() {
-            hw::enable(unsafe { &*Self::regs() }, Self::is_adc1());
+            // `clock()` already identifies which converter this is, and
+            // `SYS.CLKSEL` has a separate `AD0/AD0DIV` and `AD1/AD1DIV` pair for
+            // each, so no extra per-instance marker is needed.
+            hw::enable(unsafe { &*Self::regs() }, Self::clock());
         }
 
         #[inline(always)]
@@ -287,7 +284,7 @@ pub trait Instance: sealed::Instance {}
 /// `ADC0` and `ADC1` differ in their clock gate and NVIC vector, so both are
 /// passed in explicitly.
 macro_rules! impl_adc_instance {
-    ($ty:ty, $pac:ident, $clock:expr, $irq:expr, $index:literal, $adc1:literal) => {
+    ($ty:ty, $pac:ident, $clock:expr, $irq:expr, $index:literal) => {
         impl sealed::Instance for $ty {
             #[inline]
             fn clock() -> PeripheralClockIndex {
@@ -308,11 +305,6 @@ macro_rules! impl_adc_instance {
             fn regs() -> *const Block {
                 pac::$pac::PTR
             }
-
-            #[inline]
-            fn is_adc1() -> bool {
-                $adc1
-            }
         }
 
         impl Instance for $ty {}
@@ -324,16 +316,14 @@ impl_adc_instance!(
     ADC0,
     PeripheralClockIndex::Adc0,
     crate::interrupt::ADC0,
-    0,
-    false
+    0
 );
 impl_adc_instance!(
     crate::Adc1,
     ADC1,
     PeripheralClockIndex::Adc1,
     crate::interrupt::ADC1,
-    1,
-    true
+    1
 );
 
 /// Number of ADC instances, used to size the async state arrays.
