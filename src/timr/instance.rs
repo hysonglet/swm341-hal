@@ -21,21 +21,15 @@ pub(crate) type Block = pac::timr0::RegisterBlock;
 
 pub(crate) mod sealed {
 
-    use super::{Block, PeripheralClockIndex};
+    use super::Block;
 
     /// A TIMR peripheral the driver can talk to.
     ///
     /// Implemented for the singletons in [`crate::mcu`]. The only per-instance
     /// data are the register-block pointer, clock gate, async index and NVIC
     /// vector; all register access lives in the default methods of this trait.
-    pub trait Instance {
-        /// Clock gate that powers this peripheral (shared across TIMR0..TIMR4).
-        fn clock() -> PeripheralClockIndex;
-        /// Stable index used to look up the async state of this instance.
-        fn index() -> usize;
-        /// NVIC interrupt of this peripheral (TIMR4 is an `ExtendedInterrupt`).
-        fn irq() -> crate::interrupt::ExtendedInterrupt;
-        /// Pointer to this instance's register block (always a `timr0::RegisterBlock`).
+    pub trait Instance: crate::instance_base::InstanceBase {
+        /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
 
@@ -98,25 +92,11 @@ pub trait Instance: sealed::Instance {}
 /// register-access logic comes from the default methods of [`sealed::Instance`].
 macro_rules! impl_timr_instance {
     ($ty:ty, $pac:ident, $irq:expr, $index:literal) => {
+        crate::impl_instance_base!($ty, crate::pac::timr0::RegisterBlock, $irq, PeripheralClockIndex::Timr, $index);
+
         impl sealed::Instance for $ty {
-            #[inline]
-            fn clock() -> PeripheralClockIndex {
-                PeripheralClockIndex::Timr
-            }
-
-            #[inline]
-            fn index() -> usize {
-                $index
-            }
-
-            #[inline]
-            fn irq() -> crate::interrupt::ExtendedInterrupt {
-                $irq
-            }
-
-            #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

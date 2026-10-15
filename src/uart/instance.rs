@@ -24,21 +24,15 @@ pub(crate) type Block = crate::pac::uart0::RegisterBlock;
 
 pub(crate) mod sealed {
 
-    use super::{Block, PeripheralClockIndex};
+    use super::Block;
 
     /// A UART peripheral the driver can talk to.
     ///
     /// Implemented for the singletons in [`crate::mcu`]. The only per-instance
     /// data are the register-block pointer, clock gate, async index and NVIC
     /// vector; all register access lives in the default methods of this trait.
-    pub trait Instance {
-        /// Clock gate that powers this peripheral.
-        fn clock() -> PeripheralClockIndex;
-        /// Stable index used to look up the async state of this instance.
-        fn index() -> usize;
-        /// NVIC interrupt of this peripheral.
-        fn irq() -> crate::interrupt::ExtendedInterrupt;
-        /// Pointer to this instance's register block (always a `uart0::RegisterBlock`).
+    pub trait Instance: crate::instance_base::InstanceBase {
+        /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
 
@@ -144,23 +138,9 @@ pub trait Instance: sealed::Instance {}
 /// [`sealed::Instance`], which forward to the single [`hw`] implementation.
 macro_rules! impl_uart_instance {
     ($ty:ty, $pac:ident, $irq:ident, $clock:ident, $index:literal) => {
+        crate::impl_instance_base!($ty, crate::pac::uart0::RegisterBlock, crate::interrupt::$irq, PeripheralClockIndex::$clock, $index);
+
         impl sealed::Instance for $ty {
-            #[inline]
-            fn clock() -> PeripheralClockIndex {
-                PeripheralClockIndex::$clock
-            }
-
-            #[inline]
-            fn index() -> usize {
-                $index
-            }
-
-            #[inline]
-            fn irq() -> crate::interrupt::ExtendedInterrupt {
-                crate::interrupt::$irq
-            }
-
-            #[inline]
             fn regs() -> *const Block {
                 crate::pac::$pac::PTR
             }

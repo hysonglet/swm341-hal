@@ -34,6 +34,7 @@ pub mod embassy;
 pub mod flash;
 pub mod gpio;
 pub mod i2c;
+pub mod instance_base;
 pub mod interrupt;
 pub mod mcu;
 pub mod mode;

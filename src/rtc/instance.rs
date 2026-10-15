@@ -11,13 +11,11 @@ pub(crate) type Block = crate::pac::rtc::RegisterBlock;
 
 pub(crate) mod sealed {
 
-    use super::{Block, PeripheralClockIndex};
+    use super::Block;
 
     /// An RTC peripheral the driver can talk to.
-    pub trait Instance {
-        fn clock() -> PeripheralClockIndex;
-        fn index() -> usize;
-        fn irq() -> crate::interrupt::ExtendedInterrupt;
+    pub trait Instance: crate::instance_base::InstanceBase {
+        /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
 
@@ -133,20 +131,9 @@ pub trait Instance: sealed::Instance {}
 
 macro_rules! impl_rtc_instance {
     ($ty:ty, $pac:ident, $irq:ident, $clock:ident, $index:literal) => {
+        crate::impl_instance_base!($ty, crate::pac::rtc::RegisterBlock, crate::interrupt::$irq, PeripheralClockIndex::$clock, $index);
+
         impl sealed::Instance for $ty {
-            #[inline]
-            fn clock() -> PeripheralClockIndex {
-                PeripheralClockIndex::$clock
-            }
-            #[inline]
-            fn index() -> usize {
-                $index
-            }
-            #[inline]
-            fn irq() -> crate::interrupt::ExtendedInterrupt {
-                crate::interrupt::$irq
-            }
-            #[inline]
             fn regs() -> *const Block {
                 crate::pac::$pac::PTR
             }

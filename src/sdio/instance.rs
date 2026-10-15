@@ -19,17 +19,11 @@ pub(crate) type Block = pac::sdio::RegisterBlock;
 
 pub(crate) mod sealed {
 
-    use super::{Block, PeripheralClockIndex};
+    use super::Block;
     use crate::sdio::types::{BusWidth, ResponseType, SdioError};
 
     /// A SDIO host the driver can talk to.
-    pub trait Instance {
-        /// Clock gate that powers the SDIO host.
-        fn clock() -> PeripheralClockIndex;
-        /// Stable index used to look up async state of this instance.
-        fn index() -> usize;
-        /// NVIC interrupt of this peripheral.
-        fn irq() -> crate::interrupt::ExtendedInterrupt;
+    pub trait Instance: crate::instance_base::InstanceBase {
         /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
@@ -259,25 +253,11 @@ pub trait Instance: sealed::Instance {}
 /// Build the per-instance data for the SDIO singleton.
 macro_rules! impl_sdio_instance {
     ($ty:ty, $pac:ident, $irq:ident, $index:literal) => {
+        crate::impl_instance_base!($ty, crate::pac::sdio::RegisterBlock, crate::interrupt::$irq, PeripheralClockIndex::Sdio, $index);
+
         impl sealed::Instance for $ty {
-            #[inline]
-            fn clock() -> PeripheralClockIndex {
-                PeripheralClockIndex::Sdio
-            }
-
-            #[inline]
-            fn index() -> usize {
-                $index
-            }
-
-            #[inline]
-            fn irq() -> crate::interrupt::ExtendedInterrupt {
-                crate::interrupt::$irq
-            }
-
-            #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

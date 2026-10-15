@@ -20,17 +20,11 @@ pub(crate) type Block = pac::timr0::RegisterBlock;
 
 pub(crate) mod sealed {
 
-    use super::{Block, PeripheralClockIndex};
+    use super::Block;
 
     /// A basic timer the driver can talk to.
-    pub trait Instance {
-        /// Clock gate that powers this peripheral (shared across BTIMR0..BTIMR11).
-        fn clock() -> PeripheralClockIndex;
-        /// Stable index used to look up the async state of this instance.
-        fn index() -> usize;
-        /// NVIC interrupt of this peripheral.
-        fn irq() -> crate::interrupt::ExtendedInterrupt;
-        /// Pointer to this instance's register block (always a `timr0::RegisterBlock`).
+    pub trait Instance: crate::instance_base::InstanceBase {
+        /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
 
@@ -90,25 +84,11 @@ pub trait Instance: sealed::Instance {}
 /// Build the per-instance data for a basic timer singleton.
 macro_rules! impl_btimr_instance {
     ($ty:ty, $pac:ident, $irq:ident, $index:literal) => {
+        crate::impl_instance_base!($ty, crate::pac::timr0::RegisterBlock, crate::interrupt::$irq, PeripheralClockIndex::Btimr, $index);
+
         impl sealed::Instance for $ty {
-            #[inline]
-            fn clock() -> PeripheralClockIndex {
-                PeripheralClockIndex::Btimr
-            }
-
-            #[inline]
-            fn index() -> usize {
-                $index
-            }
-
-            #[inline]
-            fn irq() -> crate::interrupt::ExtendedInterrupt {
-                crate::interrupt::$irq
-            }
-
-            #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

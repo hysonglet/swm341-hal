@@ -24,7 +24,7 @@ pub(crate) type Block = pac::i2c0::RegisterBlock;
 
 pub(crate) mod sealed {
 
-    use super::{Block, PeripheralClockIndex};
+    use super::Block;
     use crate::i2c::Error;
 
     /// An I2C peripheral the driver can talk to.
@@ -32,20 +32,14 @@ pub(crate) mod sealed {
     /// Implemented for the singletons in [`crate::mcu`]. The only per-instance
     /// data are the register-block pointer, clock gate, async index and NVIC
     /// vector; all register access lives in the default methods of this trait.
-    pub trait Instance {
-        /// Clock gate that powers this peripheral.
-        fn clock() -> PeripheralClockIndex;
-        /// Stable index used to look up the async state of this instance.
-        fn index() -> usize;
+    pub trait Instance: crate::instance_base::InstanceBase {
+        /// Pointer to this instance's register block.
+        fn regs() -> *const Block;
         /// NVIC interrupt of this peripheral.
         ///
         /// Returns the NVIC vector as [`crate::interrupt::ExtendedInterrupt`].
         /// Every SWM341 vector -- including `I2C1` at NVIC 30, which the PAC's
         /// SVD omits -- lives in that one enumeration, so the IRQ handler can use
-        /// the `const _: ExtendedInterrupt = ...` name check.
-        fn irq() -> crate::interrupt::ExtendedInterrupt;
-        /// Pointer to this instance's register block (always a `i2c0::RegisterBlock`).
-        fn regs() -> *const Block;
 
 
         #[inline(always)]
@@ -347,25 +341,11 @@ pub trait Instance: sealed::Instance {}
 /// [`sealed::Instance`], which forward to the single [`hw`] implementation.
 macro_rules! impl_i2c_instance {
     ($ty:ty, $pac:ident, $irq:ident, $clock:ident, $index:literal) => {
+        crate::impl_instance_base!($ty, crate::pac::i2c0::RegisterBlock, crate::interrupt::$irq, PeripheralClockIndex::$clock, $index);
+
         impl sealed::Instance for $ty {
-            #[inline]
-            fn clock() -> PeripheralClockIndex {
-                PeripheralClockIndex::$clock
-            }
-
-            #[inline]
-            fn index() -> usize {
-                $index
-            }
-
-            #[inline]
-            fn irq() -> crate::interrupt::ExtendedInterrupt {
-                crate::interrupt::$irq
-            }
-
-            #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

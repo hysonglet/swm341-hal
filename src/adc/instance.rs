@@ -16,7 +16,7 @@ pub(crate) type Block = pac::adc0::RegisterBlock;
 pub(crate) mod sealed {
     use cortex_m::asm::nop;
 
-    use super::{Block, PeripheralClockIndex};
+    use super::Block;
 
     /// An ADC peripheral the driver can talk to.
     ///
@@ -26,14 +26,8 @@ pub(crate) mod sealed {
     /// the clock gate, the NVIC vector, and which `SYS.CLKSEL` divider pair the
     /// converter uses -- is reachable from [`clock`](Self::clock),
     /// [`irq`](Self::irq) and [`regs`](Self::regs).
-    pub trait Instance {
-        /// Clock gate that powers this peripheral (`Adc0` or `Adc1`).
-        fn clock() -> PeripheralClockIndex;
-        /// Stable index used to look up the async state of this instance.
-        fn index() -> usize;
-        /// NVIC interrupt of this peripheral.
-        fn irq() -> crate::interrupt::ExtendedInterrupt;
-        /// Pointer to this instance's register block (always an `adc0::RegisterBlock`).
+    pub trait Instance: crate::instance_base::InstanceBase {
+        /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
 
@@ -210,25 +204,11 @@ pub trait Instance: sealed::Instance {}
 /// passed in explicitly.
 macro_rules! impl_adc_instance {
     ($ty:ty, $pac:ident, $clock:expr, $irq:expr, $index:literal) => {
+        crate::impl_instance_base!($ty, crate::pac::adc0::RegisterBlock, $irq, $clock, $index);
+
         impl sealed::Instance for $ty {
-            #[inline]
-            fn clock() -> PeripheralClockIndex {
-                $clock
-            }
-
-            #[inline]
-            fn index() -> usize {
-                $index
-            }
-
-            #[inline]
-            fn irq() -> crate::interrupt::ExtendedInterrupt {
-                $irq
-            }
-
-            #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 
