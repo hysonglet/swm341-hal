@@ -44,12 +44,11 @@ impl<'d, T: Instance> Sdio<'d, T, Blocking> {
     pub fn new(peri: impl Peripheral<P = T> + 'd, config: Config) -> Self {
         into_ref!(peri);
         T::clock().open();
-        let regs = unsafe { &*T::regs() };
-        instance::hw::power_on(regs);
-        instance::hw::clock_enable(regs, config.clock_divider);
-        instance::hw::set_bus_width(regs, config.bus_width);
-        instance::hw::set_timeout(regs, config.timeout);
-        instance::hw::clear_interrupts(regs);
+        T::power_on();
+        T::clock_enable(config.clock_divider);
+        T::set_bus_width(config.bus_width);
+        T::set_timeout(config.timeout);
+        T::clear_interrupts();
         Self {
             peri,
             _mode: core::marker::PhantomData,
@@ -59,33 +58,32 @@ impl<'d, T: Instance> Sdio<'d, T, Blocking> {
     /// Re-apply the SD clock divider. The SD clock runs at
     /// `peripheral_clock / (divider + 1)`.
     pub fn configure_clock(&self, divider: u8) {
-        let regs = unsafe { &*T::regs() };
-        instance::hw::clock_enable(regs, divider);
+        T::clock_enable(divider);
     }
 
     /// Select the data bus width.
     pub fn set_bus_width(&self, width: BusWidth) {
-        instance::hw::set_bus_width(unsafe { &*T::regs() }, width);
+        T::set_bus_width(width);
     }
 
     /// Power the card on.
     pub fn power_on(&self) {
-        instance::hw::power_on(unsafe { &*T::regs() });
+        T::power_on();
     }
 
     /// Power the card off.
     pub fn power_off(&self) {
-        instance::hw::power_off(unsafe { &*T::regs() });
+        T::power_off();
     }
 
     /// Disable the SD clock (without powering the card off).
     pub fn disable_clock(&self) {
-        instance::hw::clock_disable(unsafe { &*T::regs() });
+        T::clock_disable();
     }
 
     /// Clear every SDIO status flag.
     pub fn clear_interrupts(&self) {
-        instance::hw::clear_interrupts(unsafe { &*T::regs() });
+        T::clear_interrupts();
     }
 
     /// Launch a command that carries no data phase and return its response.
@@ -97,7 +95,7 @@ impl<'d, T: Instance> Sdio<'d, T, Blocking> {
         check_crc: bool,
         check_idx: bool,
     ) -> Result<[u32; 4], SdioError> {
-        instance::hw::send_command(unsafe { &*T::regs() }, index, arg, response, check_crc, check_idx)
+        T::send_command(index, arg, response, check_crc, check_idx)
     }
 
     /// Read `block_count` blocks of `block_bytes` bytes each, launched by `cmd`
@@ -110,9 +108,8 @@ impl<'d, T: Instance> Sdio<'d, T, Blocking> {
         block_bytes: u16,
         block_count: u16,
     ) -> Result<(), SdioError> {
-        let regs = unsafe { &*T::regs() };
-        instance::hw::start_transfer(regs, cmd, arg, ResponseType::Short, true, block_bytes, block_count, true)?;
-        instance::hw::pio_read(regs, buf)
+        T::start_transfer(cmd, arg, ResponseType::Short, true, block_bytes, block_count, true)?;
+        T::pio_read(buf)
     }
 
     /// Write `block_count` blocks of `block_bytes` bytes each, launched by `cmd`
@@ -125,8 +122,7 @@ impl<'d, T: Instance> Sdio<'d, T, Blocking> {
         block_bytes: u16,
         block_count: u16,
     ) -> Result<(), SdioError> {
-        let regs = unsafe { &*T::regs() };
-        instance::hw::start_transfer(regs, cmd, arg, ResponseType::Short, true, block_bytes, block_count, false)?;
-        instance::hw::pio_write(regs, buf)
+        T::start_transfer(cmd, arg, ResponseType::Short, true, block_bytes, block_count, false)?;
+        T::pio_write(buf)
     }
 }
