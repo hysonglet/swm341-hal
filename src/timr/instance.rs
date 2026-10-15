@@ -2,7 +2,8 @@
 //!
 //! All five TIMR instances (`TIMR0..TIMR4`) share the `pac::timr0::RegisterBlock`
 //! type -- `TIMR1..TIMR4` are `pub use timr0 as timrN` aliases in the PAC -- so a
-//! single non-generic [`hw`] implementation serves every instance. The only
+//! single set of register-access default methods on `sealed::Instance` serves
+//! every instance. The only
 //! per-instance data are the register-block pointer, the (shared) clock gate, the
 //! async index and the NVIC vector, forwarded by [`sealed::Instance`].
 //!
@@ -19,61 +20,17 @@ use crate::pac;
 /// The register-block type shared by every TIMR instance on the SWM341.
 pub(crate) type Block = pac::timr0::RegisterBlock;
 
-/// Register access shared by every TIMR instance.
-pub(crate) mod hw {
-    use super::Block;
-
-    /// Arm and start the down-counter from `period` with prescaler `prediv`.
-    ///
-    /// `CLKSRC` selects the clock feeding the timer and `MODE` its run mode; both
-    /// are written verbatim to `CR` and default to the internal clock / free-run
-    /// in [`crate::timr::Config`].
-    pub(crate) fn start(regs: &Block, period: u32, prediv: u32, clksrc: u8, mode: u8) {
-        regs.prediv.write(|w| unsafe { w.bits(prediv) });
-        regs.load.write(|w| unsafe { w.bits(period) });
-        regs.cr.write(|w| unsafe {
-            w.clksrc().bits(clksrc as u8);
-            w.mode().bits(mode as u8)
-        });
-    }
-
-    /// Current count value (read-only `VALUE`).
-    pub(crate) fn value(regs: &Block) -> u32 {
-        regs.value.read().bits()
-    }
-
-    /// Freeze the counter; the next `start` re-arms it.
-    pub(crate) fn stop(regs: &Block) {
-        regs.halt.write(|w| unsafe { w.bits(1) });
-    }
-
-    /// True once the counter has underflowed since the last clear.
-    pub(crate) fn overflow_flag(regs: &Block) -> bool {
-        regs.if_.read().to().bit()
-    }
-
-    /// Clear the overflow flag (the `IF` flags are write-1-to-clear).
-    pub(crate) fn clear_overflow(regs: &Block) {
-        regs.if_.write(|w| w.to().set_bit());
-    }
-
-    /// Enable or disable the overflow interrupt.
-    pub(crate) fn set_overflow_irq(regs: &Block, enable: bool) {
-        regs.ie.modify(|_, w| w.to().bit(enable));
-    }
-}
-
 pub(crate) mod sealed {
     use cortex_m::peripheral::NVIC;
 
-    use super::{hw, Block, PeripheralClockIndex};
+    use super::{Block, PeripheralClockIndex};
     use cortex_m::interrupt::InterruptNumber;
 
     /// A TIMR peripheral the driver can talk to.
     ///
     /// Implemented for the singletons in [`crate::mcu`]. The only per-instance
     /// data are the register-block pointer, clock gate, async index and NVIC
-    /// vector; every register operation is forwarded to [`super::hw`].
+    /// vector; all register access lives in the default methods of this trait.
     pub trait Instance {
         /// Clock gate that powers this peripheral (shared across TIMR0..TIMR4).
         fn clock() -> PeripheralClockIndex;
@@ -89,34 +46,51 @@ pub(crate) mod sealed {
             unsafe { NVIC::unmask(Self::irq()) };
         }
 
+        /// Arm and start the down-counter from `period` with prescaler `prediv`.
         #[inline(always)]
         fn start(period: u32, prediv: u32, clksrc: u8, mode: u8) {
-            hw::start(unsafe { &*Self::regs() }, period, prediv, clksrc, mode);
+            let regs = unsafe { &*Self::regs() };
+            regs.prediv.write(|w| unsafe { w.bits(prediv) });
+            regs.load.write(|w| unsafe { w.bits(period) });
+            regs.cr.write(|w| unsafe {
+                w.clksrc().bits(clksrc as u8);
+                w.mode().bits(mode as u8)
+            });
         }
 
+        /// Current count value (read-only `VALUE`).
         #[inline(always)]
         fn value() -> u32 {
-            hw::value(unsafe { &*Self::regs() })
+            let regs = unsafe { &*Self::regs() };
+            regs.value.read().bits()
         }
 
+        /// Freeze the counter; the next `start` re-arms it.
         #[inline(always)]
         fn stop() {
-            hw::stop(unsafe { &*Self::regs() });
+            let regs = unsafe { &*Self::regs() };
+            regs.halt.write(|w| unsafe { w.bits(1) });
         }
 
+        /// True once the counter has underflowed since the last clear.
         #[inline(always)]
         fn overflow_flag() -> bool {
-            hw::overflow_flag(unsafe { &*Self::regs() })
+            let regs = unsafe { &*Self::regs() };
+            regs.if_.read().to().bit()
         }
 
+        /// Clear the overflow flag (the `IF` flags are write-1-to-clear).
         #[inline(always)]
         fn clear_overflow() {
-            hw::clear_overflow(unsafe { &*Self::regs() });
+            let regs = unsafe { &*Self::regs() };
+            regs.if_.write(|w| w.to().set_bit());
         }
 
+        /// Enable or disable the overflow interrupt.
         #[inline(always)]
         fn set_overflow_irq(enable: bool) {
-            hw::set_overflow_irq(unsafe { &*Self::regs() }, enable);
+            let regs = unsafe { &*Self::regs() };
+            regs.ie.modify(|_, w| w.to().bit(enable));
         }
     }
 }
