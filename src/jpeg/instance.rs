@@ -8,7 +8,6 @@
 //! raises. The address / length registers are raw, so they are written through
 //! `bits()`; `CFG`, `CR`, `SR` and `IR` use the typed accessors.
 
-use cortex_m::interrupt::InterruptNumber;
 
 use crate::clock::PeripheralClockIndex;
 use crate::pac;
@@ -17,10 +16,8 @@ use crate::pac;
 pub(crate) type Block = pac::jpeg::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use cortex_m::interrupt::InterruptNumber;
 
     /// A JPEG decoder the driver can talk to.
     pub trait Instance {
@@ -29,14 +26,10 @@ pub(crate) mod sealed {
         /// Stable index used to look up async state of this instance.
         fn index() -> usize;
         /// NVIC interrupt of this peripheral.
-        fn irq() -> impl InterruptNumber;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         /// Set the compressed bitstream base address and length.
         fn set_stream(base: u32, len: u32) {
@@ -147,7 +140,7 @@ macro_rules! impl_jpeg_instance {
             }
 
             #[inline]
-            fn irq() -> impl InterruptNumber {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
 

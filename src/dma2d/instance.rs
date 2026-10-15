@@ -14,7 +14,6 @@
 //! `CR`, `IF` and the per-layer registers are modelled by the PAC, so address
 //! and colour fields are written through `bits()`.
 
-use cortex_m::interrupt::InterruptNumber;
 
 use crate::clock::PeripheralClockIndex;
 use crate::pac;
@@ -54,10 +53,8 @@ macro_rules! with_layer {
 }
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, LayerId, PeripheralClockIndex};
-    use cortex_m::interrupt::InterruptNumber;
 
     /// A DMA2D engine the driver can talk to.
     pub trait Instance {
@@ -66,14 +63,10 @@ pub(crate) mod sealed {
         /// Stable index used to look up async state of this instance.
         fn index() -> usize;
         /// NVIC interrupt of this peripheral.
-        fn irq() -> impl InterruptNumber;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         /// Set a layer's source/destination memory address (`MAR`).
         fn set_layer_addr(layer: LayerId, addr: u32) {
@@ -154,7 +147,7 @@ macro_rules! impl_dma2d_instance {
             }
 
             #[inline]
-            fn irq() -> impl InterruptNumber {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
 

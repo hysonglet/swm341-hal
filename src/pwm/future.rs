@@ -27,7 +27,7 @@ pub(crate) async fn wait_period<T: Instance>() {
         if T::overflow_flag() {
             Poll::Ready(())
         } else {
-            T::unmask_irq();
+            unsafe { T::irq().enable() };
             Poll::Pending
         }
     })
@@ -40,6 +40,8 @@ pub(crate) async fn wait_period<T: Instance>() {
 macro_rules! pwm_handlers {
     ($($vector:ident => $peri:ident),* $(,)?) => {
         $(
+            const _: crate::interrupt::ExtendedInterrupt = crate::interrupt::$vector;
+
             #[no_mangle]
             pub unsafe extern "C" fn $vector() {
                 on_irq::<crate::$peri>();

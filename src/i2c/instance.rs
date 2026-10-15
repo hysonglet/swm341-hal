@@ -23,8 +23,6 @@ use crate::pac;
 pub(crate) type Block = pac::i2c0::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::interrupt::InterruptNumber;
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
     use crate::i2c::Error;
@@ -41,17 +39,14 @@ pub(crate) mod sealed {
         fn index() -> usize;
         /// NVIC interrupt of this peripheral.
         ///
-        /// Returns `impl InterruptNumber` rather than `pac::Interrupt` because
-        /// `I2C1` lives above the 29 vectors the PAC's SVD describes and is
-        /// therefore an [`crate::interrupt::ExtendedInterrupt`].
-        fn irq() -> impl InterruptNumber;
+        /// Returns the NVIC vector as [`crate::interrupt::ExtendedInterrupt`].
+        /// Every SWM341 vector -- including `I2C1` at NVIC 30, which the PAC's
+        /// SVD omits -- lives in that one enumeration, so the IRQ handler can use
+        /// the `const _: ExtendedInterrupt = ...` name check.
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block (always a `i2c0::RegisterBlock`).
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         #[inline(always)]
         fn enable_master() {
@@ -364,7 +359,7 @@ macro_rules! impl_i2c_instance {
             }
 
             #[inline]
-            fn irq() -> impl cortex_m::interrupt::InterruptNumber {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
 

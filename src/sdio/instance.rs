@@ -10,7 +10,6 @@
 //! the driver reads/writes them through the typed accessors where available and
 //! through `bits()` for the raw ones.
 
-use cortex_m::interrupt::InterruptNumber;
 
 use crate::clock::PeripheralClockIndex;
 use crate::pac;
@@ -19,10 +18,8 @@ use crate::pac;
 pub(crate) type Block = pac::sdio::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use cortex_m::interrupt::InterruptNumber;
     use crate::sdio::types::{BusWidth, ResponseType, SdioError};
 
     /// A SDIO host the driver can talk to.
@@ -32,14 +29,10 @@ pub(crate) mod sealed {
         /// Stable index used to look up async state of this instance.
         fn index() -> usize;
         /// NVIC interrupt of this peripheral.
-        fn irq() -> impl InterruptNumber;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         /// Power the card on (`CR1.PWRON`).
         fn power_on() {
@@ -278,7 +271,7 @@ macro_rules! impl_sdio_instance {
             }
 
             #[inline]
-            fn irq() -> impl InterruptNumber {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
 

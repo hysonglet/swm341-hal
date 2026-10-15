@@ -6,7 +6,6 @@
 //! The instances differ only in their clock gate (`Adc0` vs `Adc1`) and NVIC
 //! vector, which is why the instance macro takes those as arguments.
 
-use cortex_m::interrupt::InterruptNumber;
 
 use crate::clock::PeripheralClockIndex;
 use crate::pac;
@@ -16,10 +15,8 @@ pub(crate) type Block = pac::adc0::RegisterBlock;
 
 pub(crate) mod sealed {
     use cortex_m::asm::nop;
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use cortex_m::interrupt::InterruptNumber;
 
     /// An ADC peripheral the driver can talk to.
     ///
@@ -35,14 +32,10 @@ pub(crate) mod sealed {
         /// Stable index used to look up the async state of this instance.
         fn index() -> usize;
         /// NVIC interrupt of this peripheral.
-        fn irq() -> impl InterruptNumber;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block (always an `adc0::RegisterBlock`).
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         /// Power on and configure the converter.
         ///
@@ -229,7 +222,7 @@ macro_rules! impl_adc_instance {
             }
 
             #[inline]
-            fn irq() -> impl InterruptNumber {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 $irq
             }
 

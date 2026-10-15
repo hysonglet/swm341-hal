@@ -65,7 +65,7 @@ pub(crate) async fn read_async<T: Instance>(channel: u8) -> Result<u16, Error> {
             Poll::Ready(T::result())
         } else {
             T::set_eoc_irq(true);
-            T::unmask_irq();
+            unsafe { T::irq().enable() };
             Poll::Pending
         }
     })
@@ -88,6 +88,8 @@ pub(crate) async fn read_async<T: Instance>(channel: u8) -> Result<u16, Error> {
 macro_rules! adc_handlers {
     ($($vector:ident => $peri:ident),* $(,)?) => {
         $(
+            const _: crate::interrupt::ExtendedInterrupt = crate::interrupt::$vector;
+
             #[no_mangle]
             pub unsafe extern "C" fn $vector() {
                 on_irq::<crate::$peri>();

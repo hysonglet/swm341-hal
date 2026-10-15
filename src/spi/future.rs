@@ -47,7 +47,7 @@ pub(crate) async fn transfer<T: Instance>(read: &mut [u8], write: &[u8]) {
             Poll::Ready(())
         } else {
             T::set_rx_threshold_irq(true);
-            T::unmask_irq();
+            unsafe { T::irq().enable() };
             Poll::Pending
         }
     })
@@ -76,7 +76,7 @@ pub(crate) async fn transfer_in_place<T: Instance>(buf: &mut [u8]) {
             Poll::Ready(())
         } else {
             T::set_rx_threshold_irq(true);
-            T::unmask_irq();
+            unsafe { T::irq().enable() };
             Poll::Pending
         }
     })
@@ -95,7 +95,7 @@ pub(crate) async fn slave_wait_start<T: Instance>() -> Result<(), Error> {
             return Poll::Ready(Ok(()));
         }
         T::set_cs_fall_irq(true);
-        T::unmask_irq();
+        unsafe { T::irq().enable() };
         Poll::Pending
     })
     .await
@@ -111,7 +111,7 @@ pub(crate) async fn slave_wait_end<T: Instance>() -> Result<(), Error> {
             return Poll::Ready(Ok(()));
         }
         T::set_cs_rise_irq(true);
-        T::unmask_irq();
+        unsafe { T::irq().enable() };
         Poll::Pending
     })
     .await
@@ -131,7 +131,7 @@ pub(crate) async fn slave_read_byte<T: Instance>() -> Result<u8, Error> {
         }
         T::set_rx_threshold_irq(true);
         T::set_cs_rise_irq(true);
-        T::unmask_irq();
+        unsafe { T::irq().enable() };
         Poll::Pending
     })
     .await
@@ -150,7 +150,7 @@ pub(crate) async fn slave_write_byte<T: Instance>(byte: u8) -> Result<(), Error>
         // CS rise) will wake us to re-check the TX FIFO.
         T::set_rx_threshold_irq(true);
         T::set_cs_rise_irq(true);
-        T::unmask_irq();
+        unsafe { T::irq().enable() };
         Poll::Pending
     })
     .await
@@ -173,7 +173,7 @@ pub(crate) async fn slave_transfer<T: Instance>(
                 started = true;
             } else {
                 T::set_cs_fall_irq(true);
-                T::unmask_irq();
+                unsafe { T::irq().enable() };
                 return Poll::Pending;
             }
         }
@@ -206,7 +206,7 @@ pub(crate) async fn slave_transfer<T: Instance>(
         }
         T::set_rx_threshold_irq(true);
         T::set_cs_rise_irq(true);
-        T::unmask_irq();
+        unsafe { T::irq().enable() };
         Poll::Pending
     })
     .await
@@ -216,7 +216,7 @@ pub(crate) async fn slave_transfer<T: Instance>(
 macro_rules! spi_handlers {
     ($($vector:ident => $peri:ident),* $(,)?) => {
         $(
-            const _: crate::pac::Interrupt = crate::interrupt::$vector;
+            const _: crate::interrupt::ExtendedInterrupt = crate::interrupt::$vector;
 
             #[no_mangle]
             pub unsafe extern "C" fn $vector() {

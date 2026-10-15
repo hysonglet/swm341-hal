@@ -6,20 +6,18 @@
 //! The driver selects which one with a `which` byte (0 or 1).
 
 use crate::clock::PeripheralClockIndex;
-use crate::pac;
 
 /// The register-block type behind every HALL instance (`TIMRG`).
-pub(crate) type Block = pac::timrg::RegisterBlock;
+pub(crate) type Block = crate::pac::timrg::RegisterBlock;
 
 pub(crate) mod sealed {
     use super::{Block, PeripheralClockIndex};
-    use crate::pac;
 
     /// A HALL peripheral the driver can talk to.
     pub trait Instance {
         fn clock() -> PeripheralClockIndex;
         fn index() -> usize;
-        fn irq() -> pac::Interrupt;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         fn regs() -> *const Block;
 
         #[inline(always)]
@@ -131,12 +129,12 @@ macro_rules! impl_hall_instance {
                 $index
             }
             #[inline]
-            fn irq() -> pac::Interrupt {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
             #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

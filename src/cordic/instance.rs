@@ -1,21 +1,18 @@
 //! Register access for the CORDIC co-processor.
 //!
 //! The SWM341 CORDIC computes transcendental functions in hardware. There is a
-//! single instance; it is selected through the `pac::CORDIC` register block.
+//! single instance; it is selected through the `crate::pac::CORDIC` register block.
 //! Results are 16-bit Q14 fixed-point numbers (14 fractional bits, 2 integer
 //! bits) read back from one of four result registers depending on the operation.
 
 use crate::clock::PeripheralClockIndex;
-use crate::pac;
 
 /// The register-block type shared by every CORDIC instance on the SWM341.
-pub(crate) type Block = pac::cordic::RegisterBlock;
+pub(crate) type Block = crate::pac::cordic::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use crate::pac;
 
     /// A CORDIC peripheral the driver can talk to.
     pub trait Instance {
@@ -24,14 +21,10 @@ pub(crate) mod sealed {
         /// Stable index used to look up the async state of this instance.
         fn index() -> usize;
         /// NVIC interrupt of this peripheral.
-        fn irq() -> pac::Interrupt;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         #[inline(always)]
         fn enable() {}
@@ -127,12 +120,12 @@ macro_rules! impl_cordic_instance {
                 $index
             }
             #[inline]
-            fn irq() -> pac::Interrupt {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
             #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

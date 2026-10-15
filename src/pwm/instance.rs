@@ -12,7 +12,6 @@
 //! clock and run mode -- there is no per-instance enable bit, so opening the
 //! `Pwm` clock gate is what powers the family.
 
-use cortex_m::interrupt::InterruptNumber;
 
 use crate::clock::PeripheralClockIndex;
 use crate::pac;
@@ -21,10 +20,8 @@ use crate::pac;
 pub(crate) type Block = pac::pwm0::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use cortex_m::interrupt::InterruptNumber;
 
     /// A PWM peripheral the driver can talk to.
     ///
@@ -37,14 +34,10 @@ pub(crate) mod sealed {
         /// Stable index used to look up the async state of this instance.
         fn index() -> usize;
         /// NVIC interrupt of this peripheral.
-        fn irq() -> impl InterruptNumber;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block (always a `pwm0::RegisterBlock`).
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         /// Set the counter top (`PERIOD`).
         #[inline(always)]
@@ -133,7 +126,7 @@ macro_rules! impl_pwm_instance {
             }
 
             #[inline]
-            fn irq() -> impl InterruptNumber {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 $irq
             }
 

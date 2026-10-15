@@ -1,6 +1,6 @@
 //! Register access for the UART blocks.
 //!
-//! All four UARTs share the `pac::uart0::RegisterBlock` type: the PAC aliases
+//! All four UARTs share the `crate::pac::uart0::RegisterBlock` type: the PAC aliases
 //! `uart1`/`uart2`/`uart3` to `uart0`, and every `UARTx::PTR` is a
 //! `*const uart0::RegisterBlock`. The C vendor driver exploits the same fact —
 //! `UART_Init(UART_TypeDef *UARTx, …)` is a single implementation that operates
@@ -10,24 +10,21 @@
 //! We mirror that here. [`sealed::Instance`] carries only the per-instance data
 //! — the register-block pointer, clock gate, async index and NVIC vector — while
 //! the actual register twiddling lives once in the [`hw`] module as free
-//! functions over `&pac::uart0::RegisterBlock`. Each trait method is a one-line
+//! functions over `&crate::pac::uart0::RegisterBlock`. Each trait method is a one-line
 //! forward, so the heavy instructions are emitted a single time instead of once
 //! per UART.
 
 use crate::clock::PeripheralClockIndex;
-use crate::pac;
 
 /// The register-block type shared by every UART instance on the SWM341.
 ///
 /// The PAC already types `UART0..UART3::PTR` as `*const uart0::RegisterBlock`,
 /// so no pointer cast is ever needed — the four singletons agree on layout.
-pub(crate) type Block = pac::uart0::RegisterBlock;
+pub(crate) type Block = crate::pac::uart0::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use crate::pac;
 
     /// A UART peripheral the driver can talk to.
     ///
@@ -40,14 +37,10 @@ pub(crate) mod sealed {
         /// Stable index used to look up the async state of this instance.
         fn index() -> usize;
         /// NVIC interrupt of this peripheral.
-        fn irq() -> pac::Interrupt;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block (always a `uart0::RegisterBlock`).
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         #[inline(always)]
         fn enable() {
@@ -163,13 +156,13 @@ macro_rules! impl_uart_instance {
             }
 
             #[inline]
-            fn irq() -> pac::Interrupt {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
 
             #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

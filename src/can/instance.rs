@@ -7,28 +7,21 @@
 //! `INFO` word carries FF / RTR / DLC, exactly like PeliCAN.
 
 use crate::clock::PeripheralClockIndex;
-use crate::pac;
 
 /// The register-block type shared by every CAN instance on the SWM341.
-pub(crate) type Block = pac::can0::RegisterBlock;
+pub(crate) type Block = crate::pac::can0::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use crate::pac;
 
     /// A CAN peripheral the driver can talk to.
     pub trait Instance {
         fn clock() -> PeripheralClockIndex;
         fn index() -> usize;
-        fn irq() -> pac::Interrupt;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         /// Take the controller out of reset (clock gate already powered it).
         #[inline(always)]
@@ -151,14 +144,14 @@ macro_rules! impl_can_instance {
                 $index
             }
             // CAN0 and CAN1 share the single CAN interrupt vector (16), so both
-            // report the same `pac::Interrupt`.
+            // report the same `ExtendedInterrupt`.
             #[inline]
-            fn irq() -> pac::Interrupt {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
             #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

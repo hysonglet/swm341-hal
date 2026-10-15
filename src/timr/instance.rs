@@ -12,7 +12,6 @@
 //! freezes the counter. There is no per-instance enable bit; opening the `Timr`
 //! clock gate is what powers the whole family.
 
-use cortex_m::interrupt::InterruptNumber;
 
 use crate::clock::PeripheralClockIndex;
 use crate::pac;
@@ -21,10 +20,8 @@ use crate::pac;
 pub(crate) type Block = pac::timr0::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use cortex_m::interrupt::InterruptNumber;
 
     /// A TIMR peripheral the driver can talk to.
     ///
@@ -37,14 +34,10 @@ pub(crate) mod sealed {
         /// Stable index used to look up the async state of this instance.
         fn index() -> usize;
         /// NVIC interrupt of this peripheral (TIMR4 is an `ExtendedInterrupt`).
-        fn irq() -> impl InterruptNumber;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block (always a `timr0::RegisterBlock`).
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         /// Arm and start the down-counter from `period` with prescaler `prediv`.
         #[inline(always)]
@@ -117,7 +110,7 @@ macro_rules! impl_timr_instance {
             }
 
             #[inline]
-            fn irq() -> impl InterruptNumber {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 $irq
             }
 
@@ -135,8 +128,8 @@ impl_timr_instance!(crate::Timr0, TIMR0, crate::interrupt::TIMR0, 0);
 impl_timr_instance!(crate::Timr1, TIMR1, crate::interrupt::TIMR1, 1);
 impl_timr_instance!(crate::Timr2, TIMR2, crate::interrupt::TIMR2, 2);
 impl_timr_instance!(crate::Timr3, TIMR3, crate::interrupt::TIMR3, 3);
-// TIMR4 is an `ExtendedInterrupt` (NVIC 79); `irq()` still returns a value that
-// implements `InterruptNumber`, so the trait signature is unchanged.
+// TIMR4 is an `ExtendedInterrupt` (NVIC 79); like every other instance, `irq()`
+// now returns `crate::interrupt::ExtendedInterrupt` directly.
 impl_timr_instance!(crate::Timr4, TIMR4, crate::interrupt::TIMR4, 4);
 
 /// Number of TIMR instances, used to size the async state arrays.

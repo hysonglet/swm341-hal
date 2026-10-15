@@ -5,10 +5,9 @@
 //! `IE`/`IF` registers carry the per-channel transfer-complete interrupt.
 
 use crate::clock::PeripheralClockIndex;
-use crate::pac;
 
 /// The register-block type shared by every DMA instance on the SWM341.
-pub(crate) type Block = pac::dma::RegisterBlock;
+pub(crate) type Block = crate::pac::dma::RegisterBlock;
 
 /// Run `$body` with `$cr` bound to the register view of DMA channel `$ch` (0..3).
 macro_rules! with_dma_ch {
@@ -35,22 +34,16 @@ macro_rules! with_dma_ch {
 }
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use crate::pac;
 
     /// A DMA peripheral the driver can talk to.
     pub trait Instance {
         fn clock() -> PeripheralClockIndex;
         fn index() -> usize;
-        fn irq() -> pac::Interrupt;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         #[inline(always)]
         fn enable() {}
@@ -131,12 +124,12 @@ macro_rules! impl_dma_instance {
                 $index
             }
             #[inline]
-            fn irq() -> pac::Interrupt {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
             #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

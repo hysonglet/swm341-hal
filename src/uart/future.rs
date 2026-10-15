@@ -34,7 +34,7 @@ pub(crate) async fn read<T: Instance>() -> Result<u8, Error> {
             }
         } else {
             T::set_rxie(true);
-            T::unmask_irq();
+            unsafe { T::irq().enable() };
             Poll::Pending
         }
     })
@@ -56,7 +56,7 @@ pub(crate) async fn write<T: Instance>(bytes: &[u8]) {
             Poll::Ready(())
         } else {
             T::set_txie(true);
-            T::unmask_irq();
+            unsafe { T::irq().enable() };
             Poll::Pending
         }
     })
@@ -81,7 +81,7 @@ pub(crate) async fn read_bytes<T: Instance>(buf: &mut [u8]) -> Result<(), Error>
 macro_rules! uart_handlers {
     ($($vector:ident => $peri:ident),* $(,)?) => {
         $(
-            const _: crate::pac::Interrupt = crate::interrupt::$vector;
+            const _: crate::interrupt::ExtendedInterrupt = crate::interrupt::$vector;
 
             #[no_mangle]
             pub unsafe extern "C" fn $vector() {

@@ -10,7 +10,6 @@
 //! All of `RSTVAL`, `INTVAL`, `IF` and `FEED` are modelled by the PAC as raw
 //! words, so the driver addresses them through `bits()`.
 
-use cortex_m::interrupt::InterruptNumber;
 
 use crate::clock::PeripheralClockIndex;
 use crate::pac;
@@ -19,10 +18,8 @@ use crate::pac;
 pub(crate) type Block = pac::wdt::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use cortex_m::interrupt::InterruptNumber;
 
     /// A watchdog peripheral the driver can talk to.
     pub trait Instance {
@@ -31,14 +28,10 @@ pub(crate) mod sealed {
         /// Stable index used to look up async state of this instance.
         fn index() -> usize;
         /// NVIC interrupt of this peripheral.
-        fn irq() -> impl InterruptNumber;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         /// Write the counter reload value (`RSTVAL`).
         #[inline(always)]
@@ -117,7 +110,7 @@ macro_rules! impl_wdt_instance {
             }
 
             #[inline]
-            fn irq() -> impl InterruptNumber {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
 

@@ -5,28 +5,21 @@
 //! registers and then strobing `LOAD.TIME` copies them into the live counter.
 
 use crate::clock::PeripheralClockIndex;
-use crate::pac;
 
 /// The register-block type shared by every RTC instance on the SWM341.
-pub(crate) type Block = pac::rtc::RegisterBlock;
+pub(crate) type Block = crate::pac::rtc::RegisterBlock;
 
 pub(crate) mod sealed {
-    use cortex_m::peripheral::NVIC;
 
     use super::{Block, PeripheralClockIndex};
-    use crate::pac;
 
     /// An RTC peripheral the driver can talk to.
     pub trait Instance {
         fn clock() -> PeripheralClockIndex;
         fn index() -> usize;
-        fn irq() -> pac::Interrupt;
+        fn irq() -> crate::interrupt::ExtendedInterrupt;
         fn regs() -> *const Block;
 
-        #[inline(always)]
-        fn unmask_irq() {
-            unsafe { NVIC::unmask(Self::irq()) };
-        }
 
         /// Enable the RTC counter (write the EN register's enable bit).
         #[inline(always)]
@@ -150,12 +143,12 @@ macro_rules! impl_rtc_instance {
                 $index
             }
             #[inline]
-            fn irq() -> pac::Interrupt {
+            fn irq() -> crate::interrupt::ExtendedInterrupt {
                 crate::interrupt::$irq
             }
             #[inline]
             fn regs() -> *const Block {
-                pac::$pac::PTR
+                crate::pac::$pac::PTR
             }
         }
 

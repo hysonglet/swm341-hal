@@ -2,117 +2,167 @@
 //!
 //! The SVD that `swm341-pac` is generated from only describes the vectors
 //! 0..=28, while the silicon implements 0..=88 (see the vendor header
-//! `CSL/CMSIS/DeviceSupport/SWM341.h`). Everything above index 28 therefore has
-//! no `pac::Interrupt` variant and no weak alias in the PAC's `device.x`.
+//! `CSL/CMSIS/DeviceSupport/SWM341.h`). The vectors above index 28 therefore
+//! have no `pac::Interrupt` variant and no weak alias in the PAC's `device.x`.
 //!
-//! This module closes that gap:
+//! This crate closes that gap with a single unified [`ExtendedInterrupt`]
+//! enumeration that lists *all* 89 vectors (0..=88) with their real NVIC index
+//! as the discriminant. Every vector also gets an upper-case datasheet alias
+//! (`UART0`, `GPIOA`, ...), so name checks and the `device.x` weak aliases
+//! resolve against one type. Because `ExtendedInterrupt` implements
+//! [`InterruptNumber`] and carries `enable`/`disable` helpers, drivers return it
+//! directly from `Instance::irq()` and toggle the NVIC with
+//! `T::irq().enable()` / `T::irq().disable()`.
 //!
-//! * the vectors 0..=28 are re-exported from the PAC, unchanged;
-//! * the missing ones are listed in [`ExtendedInterrupt`], together with an
-//!   upper-case alias per vector so that `#[interrupt]`'s sanity check
-//!   (`interrupt::<NAME>`) resolves for e.g. the GPIO port handlers;
-//! * weak aliases for *all* 89 vectors are emitted by this crate's own
-//!   `device.x`, which is why the `rt` feature of the PAC is not enabled.
+//! Weak aliases for all 89 vectors are emitted by this crate's own `device.x`
+//! (the PAC `rt` feature is left off to avoid a second, conflicting
+//! `__INTERRUPTS`).
 
 pub use cortex_m::interrupt::InterruptNumber;
 
 use cortex_m::peripheral::NVIC;
 
-/// Aliases for the 29 vectors the PAC does know about.
+/// All 89 NVIC vectors of the SWM341, indexed by their real NVIC number.
 ///
-/// Deliberately spelled the way the datasheet and `SWM341.h` spell them, which
-/// differs from the SVD for several entries (`PWM0` vs `PWM_CH0`, `ADC0` vs
-/// `SARADC0`, `TIMR2` vs `TIMER2`, ...). Only the datasheet spelling has a slot
-/// in [`crate::vector_table`], so importing the PAC's variants here would make
-/// `#[interrupt] fn PWM_CH0()` compile while silently never being installed.
-macro_rules! pac_vectors {
-    ($($alias:ident = $variant:ident,)+) => {
-        $(
-            #[doc = concat!("NVIC alias matching the vector named `", stringify!($alias), "` in the datasheet.")]
-            pub const $alias: crate::pac::Interrupt = crate::pac::Interrupt::$variant;
-        )+
-    };
+/// The discriminant of every variant is the NVIC index used by the hardware
+/// and by [`crate::vector_table`]. Vectors 0..=28 are the ones the SVD
+/// describes (spelled to match the datasheet, which differs from the SVD for
+/// several entries: `PWM0` vs `PWM_CH0`, `ADC0` vs `SARADC0`, `TIMR2` vs
+/// `TIMER2`, ...); vectors 29..=88 are the ones the SVD omits entirely.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u16)]
+#[non_exhaustive]
+pub enum ExtendedInterrupt {
+    // --- vectors 0..=28 (described by the SVD) ---
+    Uart0 = 0,
+    Uart1 = 1,
+    Timr0 = 2,
+    Timr1 = 3,
+    Dma = 4,
+    Spi0 = 5,
+    Pwm0 = 6,
+    Wdt = 7,
+    Uart2 = 8,
+    Pwm1 = 9,
+    Adc0 = 10,
+    Btimr0 = 11,
+    Hall0 = 12,
+    Pwm2 = 13,
+    PwmBrk = 14,
+    I2c0 = 15,
+    Can0 = 16,
+    Spi1 = 17,
+    Rtc = 18,
+    Pwm3 = 19,
+    Timr2 = 20,
+    Uart3 = 21,
+    Timr3 = 22,
+    Adc1 = 23,
+    Bod = 24,
+    Cordic = 25,
+    Btimr1 = 26,
+    Pwm4 = 27,
+    Hall3 = 28,
+    // --- vectors 29..=88 (missing from the SVD) ---
+    Btimr2 = 29,
+    I2c1 = 30,
+    Btimr3 = 31,
+    Acmp = 32,
+    XtalStop = 33,
+    Fspi = 34,
+    GpioA = 35,
+    GpioB = 36,
+    GpioC = 37,
+    GpioD = 38,
+    GpioM = 39,
+    GpioN = 40,
+    GpioA0 = 41,
+    GpioA1 = 42,
+    GpioA5 = 43,
+    GpioA6 = 44,
+    GpioA10 = 45,
+    GpioA11 = 46,
+    GpioA12 = 47,
+    GpioA13 = 48,
+    GpioB0 = 49,
+    GpioB1 = 50,
+    GpioB2 = 51,
+    GpioC0 = 52,
+    GpioC1 = 53,
+    GpioC2 = 54,
+    GpioC3 = 55,
+    GpioC4 = 56,
+    GpioD3 = 57,
+    GpioD4 = 58,
+    GpioD5 = 59,
+    GpioD6 = 60,
+    GpioD7 = 61,
+    GpioD8 = 62,
+    GpioC9 = 63,
+    GpioC10 = 64,
+    GpioC11 = 65,
+    GpioC12 = 66,
+    GpioM0 = 67,
+    GpioM1 = 68,
+    GpioM2 = 69,
+    GpioM3 = 70,
+    GpioM4 = 71,
+    Div = 72,
+    Lcd = 73,
+    GpioE = 74,
+    Jpeg = 75,
+    Sdio = 76,
+    Usb = 77,
+    Can1 = 78,
+    Timr4 = 79,
+    Btimr4 = 80,
+    Btimr5 = 81,
+    Btimr6 = 82,
+    Btimr7 = 83,
+    Btimr8 = 84,
+    Btimr9 = 85,
+    Btimr10 = 86,
+    Btimr11 = 87,
+    Dma2d = 88,
 }
 
-pac_vectors! {
-    UART0 = UART0,
-    UART1 = UART1,
-    TIMR0 = TIMR0,
-    TIMR1 = TIMR1,
-    DMA = DMA,
-    SPI0 = SPI0,
-    PWM0 = PWM_CH0,
-    WDT = WDT,
-    UART2 = UART2,
-    PWM1 = PWM_CH1,
-    ADC0 = SARADC0,
-    BTIMR0 = BTIMER0,
-    HALL0 = HALL0,
-    PWM2 = PWM_CH2,
-    PWMBRK = PWM_HALT,
-    I2C0 = I2C0,
-    CAN0 = CAN0,
-    SPI1 = SPI1,
-    RTC = RTC_BASE,
-    PWM3 = PWM_CH3,
-    TIMR2 = TIMER2,
-    UART3 = UART3,
-    TIMR3 = TIMER3,
-    ADC1 = SARADC1,
-    BOD = BOD,
-    CORDIC = CORDIC,
-    BTIMR1 = BTIMER1,
-    PWM4 = PWM_CH4,
-    HALL3 = HALL1,
+unsafe impl InterruptNumber for ExtendedInterrupt {
+    #[inline(always)]
+    fn number(self) -> u16 {
+        self as u16
+    }
 }
 
-macro_rules! extended_vectors {
+impl ExtendedInterrupt {
+    /// NVIC index of this vector.
+    #[inline]
+    pub fn number(self) -> u16 {
+        self as u16
+    }
+
+    /// Allow this vector to preempt the current execution.
+    ///
+    /// # Safety
+    ///
+    /// The handler must already be installed in the vector table and it
+    /// must be able to deal with the peripheral state it is handed.
+    #[inline]
+    pub unsafe fn enable(self) {
+        NVIC::unmask(self);
+    }
+
+    /// Stop this vector from preempting the current execution.
+    #[inline]
+    pub fn disable(self) {
+        NVIC::mask(self);
+    }
+}
+
+/// Datasheet-spelled aliases for every [`ExtendedInterrupt`] variant, so that
+/// name checks (`interrupt::<NAME>`) and the `device.x` weak aliases resolve
+/// against the canonical vector name.
+macro_rules! interrupt_aliases {
     ($( ($alias:ident, $variant:ident, $number:literal, $doc:literal), )+) => {
-        /// NVIC vectors 29..=88 that the PAC's SVD is missing.
-        ///
-        /// The numeric discriminant of every variant is the real NVIC index.
-        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-        #[repr(u16)]
-        #[non_exhaustive]
-        pub enum ExtendedInterrupt {
-            $(
-                #[doc = $doc]
-                $variant = $number,
-            )+
-        }
-
-        unsafe impl InterruptNumber for ExtendedInterrupt {
-            #[inline(always)]
-            fn number(self) -> u16 {
-                self as u16
-            }
-        }
-
-        impl ExtendedInterrupt {
-            /// NVIC index of this vector.
-            #[inline]
-            pub fn number(self) -> u16 {
-                self as u16
-            }
-
-            /// Allow this vector to preempt the current execution.
-            ///
-            /// # Safety
-            ///
-            /// The handler must already be installed in the vector table and it
-            /// must be able to deal with the peripheral state it is handed.
-            #[inline]
-            pub unsafe fn enable(self) {
-                NVIC::unmask(self);
-            }
-
-            /// Stop this vector from preempting the current execution.
-            #[inline]
-            pub fn disable(self) {
-                NVIC::mask(self);
-            }
-        }
-
         $(
             #[doc = concat!("Alias for `ExtendedInterrupt::", stringify!($variant), "` (NVIC ", stringify!($number), ").")]
             pub const $alias: ExtendedInterrupt = ExtendedInterrupt::$variant;
@@ -120,7 +170,36 @@ macro_rules! extended_vectors {
     };
 }
 
-extended_vectors! {
+interrupt_aliases! {
+    (UART0, Uart0, 0, "UART0."),
+    (UART1, Uart1, 1, "UART1."),
+    (TIMR0, Timr0, 2, "TIMR0."),
+    (TIMR1, Timr1, 3, "TIMR1."),
+    (DMA, Dma, 4, "DMA."),
+    (SPI0, Spi0, 5, "SPI0."),
+    (PWM0, Pwm0, 6, "PWM0."),
+    (WDT, Wdt, 7, "WDT."),
+    (UART2, Uart2, 8, "UART2."),
+    (PWM1, Pwm1, 9, "PWM1."),
+    (ADC0, Adc0, 10, "ADC0."),
+    (BTIMR0, Btimr0, 11, "BTIMR0."),
+    (HALL0, Hall0, 12, "HALL0."),
+    (PWM2, Pwm2, 13, "PWM2."),
+    (PWMBRK, PwmBrk, 14, "PWMBRK."),
+    (I2C0, I2c0, 15, "I2C0."),
+    (CAN0, Can0, 16, "CAN0."),
+    (SPI1, Spi1, 17, "SPI1."),
+    (RTC, Rtc, 18, "RTC."),
+    (PWM3, Pwm3, 19, "PWM3."),
+    (TIMR2, Timr2, 20, "TIMR2."),
+    (UART3, Uart3, 21, "UART3."),
+    (TIMR3, Timr3, 22, "TIMR3."),
+    (ADC1, Adc1, 23, "ADC1."),
+    (BOD, Bod, 24, "BOD."),
+    (CORDIC, Cordic, 25, "CORDIC."),
+    (BTIMR1, Btimr1, 26, "BTIMR1."),
+    (PWM4, Pwm4, 27, "PWM4."),
+    (HALL3, Hall3, 28, "HALL3."),
     (BTIMR2, Btimr2, 29, "Basic timer 2."),
     (I2C1, I2c1, 30, "I2C1."),
     (BTIMR3, Btimr3, 31, "Basic timer 3."),

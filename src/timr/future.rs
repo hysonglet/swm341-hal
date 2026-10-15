@@ -29,7 +29,7 @@ pub(crate) async fn delay<T: Instance>(period: u32) {
         if T::overflow_flag() {
             Poll::Ready(())
         } else {
-            T::unmask_irq();
+            unsafe { T::irq().enable() };
             Poll::Pending
         }
     })
@@ -42,6 +42,8 @@ pub(crate) async fn delay<T: Instance>(period: u32) {
 macro_rules! timr_handlers {
     ($($vector:ident => $peri:ident),* $(,)?) => {
         $(
+            const _: crate::interrupt::ExtendedInterrupt = crate::interrupt::$vector;
+
             #[no_mangle]
             pub unsafe extern "C" fn $vector() {
                 on_irq::<crate::$peri>();

@@ -87,7 +87,7 @@ pub(crate) async fn master<T: Instance>(
                 Step::Addr => {
                     if !T::is_txe() {
                         T::set_txe_irq(true);
-                        T::unmask_irq();
+                        unsafe { T::irq().enable() };
                         return Poll::Pending;
                     }
                     T::clear_txe();
@@ -116,7 +116,7 @@ pub(crate) async fn master<T: Instance>(
                 Step::WData => {
                     if !T::is_txe() {
                         T::set_txe_irq(true);
-                        T::unmask_irq();
+                        unsafe { T::irq().enable() };
                         return Poll::Pending;
                     }
                     T::clear_txe();
@@ -135,7 +135,7 @@ pub(crate) async fn master<T: Instance>(
                 Step::RData => {
                     if !T::is_rxne() {
                         T::set_rxne_irq(true);
-                        T::unmask_irq();
+                        unsafe { T::irq().enable() };
                         return Poll::Pending;
                     }
                     T::clear_rxne();
@@ -156,7 +156,7 @@ pub(crate) async fn master<T: Instance>(
                 Step::RxDone => {
                     if !T::is_rxdone() {
                         T::set_rxdone_irq(true);
-                        T::unmask_irq();
+                        unsafe { T::irq().enable() };
                         return Poll::Pending;
                     }
                     T::clear_rxdone();
@@ -177,7 +177,7 @@ pub(crate) async fn master<T: Instance>(
                 Step::TxDone => {
                     if !T::is_txdone() {
                         T::set_txdone_irq(true);
-                        T::unmask_irq();
+                        unsafe { T::irq().enable() };
                         return Poll::Pending;
                     }
                     T::clear_txdone();
@@ -257,7 +257,7 @@ pub(crate) async fn slave_wait_address<T: Instance>() -> Result<bool, Error> {
         }
         T::set_start_irq(true);
         T::set_stop_irq(true);
-        T::unmask_irq();
+        unsafe { T::irq().enable() };
         Poll::Pending
     })
     .await
@@ -276,7 +276,7 @@ pub(crate) async fn slave_read_byte<T: Instance>() -> Result<u8, Error> {
         }
         T::set_rxne_irq(true);
         T::set_stop_irq(true);
-        T::unmask_irq();
+        unsafe { T::irq().enable() };
         Poll::Pending
     })
     .await
@@ -294,7 +294,7 @@ pub(crate) async fn slave_write_byte<T: Instance>(byte: u8) -> Result<(), Error>
         }
         T::set_txe_irq(true);
         T::set_stop_irq(true);
-        T::unmask_irq();
+        unsafe { T::irq().enable() };
         Poll::Pending
     })
     .await
@@ -311,7 +311,7 @@ pub(crate) async fn slave_wait_stop<T: Instance>() -> Result<(), Error> {
             return Poll::Ready(Ok(()));
         }
         T::set_stop_irq(true);
-        T::unmask_irq();
+        unsafe { T::irq().enable() };
         Poll::Pending
     })
     .await
@@ -344,7 +344,7 @@ pub(crate) async fn slave_transfer<T: Instance>(
                 } else {
                     T::set_start_irq(true);
                     T::set_stop_irq(true);
-                    T::unmask_irq();
+                    unsafe { T::irq().enable() };
                     return Poll::Pending;
                 }
             }
@@ -367,13 +367,13 @@ pub(crate) async fn slave_transfer<T: Instance>(
                             nacked = true;
                         }
                         T::set_stop_irq(true);
-                        T::unmask_irq();
+                        unsafe { T::irq().enable() };
                         return Poll::Pending;
                     }
                 } else {
                     T::set_txe_irq(true);
                     T::set_stop_irq(true);
-                    T::unmask_irq();
+                    unsafe { T::irq().enable() };
                     return Poll::Pending;
                 }
             } else if T::is_rxne() {
@@ -386,7 +386,7 @@ pub(crate) async fn slave_transfer<T: Instance>(
             } else {
                 T::set_rxne_irq(true);
                 T::set_stop_irq(true);
-                T::unmask_irq();
+                unsafe { T::irq().enable() };
                 return Poll::Pending;
             }
         }
@@ -394,11 +394,14 @@ pub(crate) async fn slave_transfer<T: Instance>(
     .await
 }
 
-/// Install the NVIC handlers. `I2C1` is an `ExtendedInterrupt`, so unlike the
-/// other vectors it is not a `pac::Interrupt` and the name check is omitted.
+/// Install the NVIC handlers. Every vector -- including `I2C1` -- is now an
+/// `ExtendedInterrupt`, so the `const _: ExtendedInterrupt = ...` name check is
+/// applied like the other drivers.
 macro_rules! i2c_handlers {
     ($($vector:ident => $peri:ident),* $(,)?) => {
         $(
+            const _: crate::interrupt::ExtendedInterrupt = crate::interrupt::$vector;
+
             #[no_mangle]
             pub unsafe extern "C" fn $vector() {
                 on_irq::<crate::$peri>();
