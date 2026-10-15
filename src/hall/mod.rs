@@ -20,7 +20,6 @@ use embassy_hal_internal::{into_ref, Peripheral, PeripheralRef};
 use crate::mode::{Blocking, Mode};
 
 use instance::Instance;
-use instance::hw;
 
 pub mod instance;
 mod types;
@@ -42,10 +41,9 @@ impl<'d, T: Instance, M: Mode> Hall<'d, T, M> {
         T::clock().open();
         T::enable();
         let which = select.which();
-        let regs = unsafe { &*T::regs() };
-        hw::enable_hall(regs, which);
+        T::enable_hall(which);
         if config.enable_interrupt {
-            hw::enable_interrupt(regs, which);
+            T::enable_interrupt(which);
         }
         Self {
             peri,
@@ -57,8 +55,7 @@ impl<'d, T: Instance, M: Mode> Hall<'d, T, M> {
 
 impl<'d, T: Instance, M: Mode> Drop for Hall<'d, T, M> {
     fn drop(&mut self) {
-        let regs = unsafe { &*T::regs() };
-        hw::disable_hall(regs, self.which);
+        T::disable_hall(self.which);
         T::disable();
         T::clock().close();
     }
@@ -67,31 +64,31 @@ impl<'d, T: Instance, M: Mode> Drop for Hall<'d, T, M> {
 impl<'d, T: Instance> Hall<'d, T, Blocking> {
     /// Current logic level of input line `input` (0..=2).
     pub fn input_level(&self, input: u8) -> bool {
-        hw::read_status(unsafe { &*T::regs() }, self.which, input)
+        T::read_status(self.which, input)
     }
 
     /// `true` if input `input` latched a change since the last clear.
     pub fn is_flag(&self, input: u8) -> bool {
-        hw::is_flag(unsafe { &*T::regs() }, self.which, input)
+        T::is_flag(self.which, input)
     }
 
     /// Clear the change flag for input `input` (write 1 to clear).
     pub fn clear_flag(&mut self, input: u8) {
-        hw::clear_flag(unsafe { &*T::regs() }, self.which, input);
+        T::clear_flag(self.which, input);
     }
 
     /// The captured value register for this interface (e.g. a timestamp/state).
     pub fn read_value(&self) -> u32 {
-        hw::read_value(unsafe { &*T::regs() }, self.which)
+        T::read_value(self.which)
     }
 
     /// Arm the input-change interrupt (if not already armed).
     pub fn enable_interrupt(&mut self) {
-        hw::enable_interrupt(unsafe { &*T::regs() }, self.which);
+        T::enable_interrupt(self.which);
     }
 
     /// Disarm the input-change interrupt.
     pub fn disable_interrupt(&mut self) {
-        hw::disable_interrupt(unsafe { &*T::regs() }, self.which);
+        T::disable_interrupt(self.which);
     }
 }
