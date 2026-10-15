@@ -235,22 +235,34 @@ impl<'d, T: Instance> Adc<'d, T, Async> {
         }
     }
 
-    /// Convert `channel`, awaiting the end-of-conversion interrupt.
+    /// Convert the channel behind `input`, awaiting the end-of-conversion
+    /// interrupt.
+    ///
+    /// Taking an [`AdcInput`] (rather than a bare channel number) ties the read
+    /// to a pin that was actually routed through the analog mux, so a wrong
+    /// channel cannot be handed in by accident.
     ///
     /// Deliberately takes `&mut self`: the channel mask, the sequence FIFO and
     /// the interrupt waker are all per-instance state, so two concurrent readers
     /// would reprogram the channel under each other and then read whatever the
     /// other one converted. `&mut self` makes that unrepresentable.
-    pub async fn try_read_async(&mut self, channel: u8) -> Result<u16, Error> {
-        future::read_async::<T>(channel).await
+    pub async fn try_read_async<P: AdcPin<T>>(
+        &mut self,
+        input: &AdcInput<'_, T, P>,
+    ) -> Result<u16, Error> {
+        future::read_async::<T>(input.channel).await
     }
 
-    /// Convert `channel`, awaiting the end-of-conversion interrupt.
+    /// Convert the channel behind `input`, awaiting the end-of-conversion
+    /// interrupt.
     ///
     /// Panics if the sample turned out to come from a different channel; see
     /// [`try_read_async`](Self::try_read_async) for the fallible variant.
-    pub async fn read_async(&mut self, channel: u8) -> u16 {
-        match self.try_read_async(channel).await {
+    pub async fn read_async<P: AdcPin<T>>(
+        &mut self,
+        input: &AdcInput<'_, T, P>,
+    ) -> u16 {
+        match self.try_read_async(input).await {
             Ok(value) => value,
             Err(Error::InvalidChannel) => panic!("adc: channel out of range"),
             Err(Error::ChannelMismatch { expected, got }) => {

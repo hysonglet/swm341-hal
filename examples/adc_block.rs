@@ -25,12 +25,25 @@ fn main() -> ! {
 
     let mut adc = hal::adc::Adc::new(p.adc0(), hal::adc::Config::default());
 
-    // Route PC6 to the analog mux; `add_pin` records that PC6 is ADC0 channel 0.
-    let pc6 = adc.add_pin(p.PC6);
+    // Route PC0 to the analog mux; `add_pin` records that PC0 is ADC0 channel 0.
+    let pc0 = adc.add_pin(p.PC0);
+    // Route PC1 to the analog mux; `add_pin` records that PC1 is ADC0 channel 1.
+    let pc1 = adc.add_pin(p.PC1);
 
     loop {
-        let sample = adc.read_input(&pc6);
-        rprintln!("ADC ch{} = {} (0x{:x})", pc6.channel, sample, sample);
+        rprintln!("start");
+        let pc0_sample = adc.read_input(&pc0);
+        let pc1_sample = adc.read_input(&pc1);
+
+        rprintln!(
+            "ADC ch{} = {} (0x{:x}) ch{} = {} (0x{:x})",
+            pc0.channel,
+            pc0_sample,
+            pc0_sample,
+            pc1.channel,
+            pc1_sample,
+            pc1_sample
+        );
         // ~1s delay at 150 MHz to avoid flooding the RTT channel.
         cortex_m::asm::delay(150_000_000);
     }
