@@ -59,6 +59,8 @@ pub mod devices {
         Dma2d,
         // JPEG decoder.
         Jpeg,
+        // 12-bit digital-to-analog converter.
+        Dac,
     );
 
     pub use peripherals::*;
