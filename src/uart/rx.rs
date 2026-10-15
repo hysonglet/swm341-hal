@@ -5,7 +5,7 @@
 
 use super::{Error, Instance, Uart};
 use crate::gpio::Pin;
-use crate::mode::{Blocking, Mode};
+use crate::mode::Mode;
 
 #[cfg(feature = "embassy")]
 use super::future;
@@ -25,11 +25,9 @@ impl<'d, T: Instance, Tx: Pin, Rx: Pin, M: Mode> Uart<'d, T, Tx, Rx, M> {
         }
         Ok(())
     }
-}
 
-impl<'d, T: Instance, Tx: Pin, Rx: Pin> Uart<'d, T, Tx, Rx, Blocking> {
-    /// Read a single byte, blocking until one is ready.
-    pub fn read(&mut self) -> Result<u8, Error> {
+    /// Blocking read of a single byte, spinning until one is ready.
+    pub fn blocking_read_byte(&mut self) -> Result<u8, Error> {
         while !T::is_rx_not_empty() {}
         let (data, parity_error) = T::read_data();
         if parity_error {

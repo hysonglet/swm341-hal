@@ -91,6 +91,11 @@ pub trait Instance {
                 .func1
                 .modify(|r, w| unsafe { w.bits((r.bits() & mask) | function) }),
         }
+        // `INEN` (digital input buffer) resets to 0; any alternate function that
+        // receives data -- UART RX, SPI MISO, I2C SDA/SCL -- needs it on, or the
+        // peripheral never samples the pad. Enabling it for output-only functions
+        // is harmless, so just turn it on for every muxed pad.
+        put_bit!(port.inen, pin, true);
     }
 
     fn set_direction(pin: u8, output: bool) {

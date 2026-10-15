@@ -6,13 +6,18 @@
 //! Each `Pin{n}Func` enumerates the UART functions selectable on pin `{n}` of
 //! its bank; the numeric value of every variant is the 4-bit code written into
 //! `PORTx.FUNC0/FUNC1`. Code `0` (generic GPIO) is omitted because it is the
-//! default path. The variants are the type-checked argument to [`crate::uart::Uart::new`].
+//! default path. The `UARTx_TX` / `UARTx_RX` variants additionally back the
+//! [`crate::uart::UartTxPin`] / [`crate::uart::UartRxPin`] traits, so
+//! [`crate::uart::Uart::new`] can derive the `PORTx.FUNC` code from the pin type
+//! and the UART instance without the caller spelling it out.
 
 
 /// Generate the per-pin `Pin{n}Func` enums for one bank module.
 ///
 /// Each entry is `PinType => Enum { Variant = func_code, ... }`; the macro
-/// writes the `#[repr(u8)]` enum plus its `PinFunc` / `PinFuncOf` impls.
+/// writes the `#[repr(u8)]` enum plus its `PinFunc` / `PinFuncOf` impls, and
+/// forwards every `UARTx_TX` / `UARTx_RX` variant to [`uart_role_impls`] so the
+/// role traits get their impls for free.
 macro_rules! pad_funcs {
     ( $( $pin_ty:ident => $enum:ident { $( $var:ident = $val:literal ),* $(,)? } ),* $(,)? ) => {
         $(
@@ -26,8 +31,46 @@ macro_rules! pad_funcs {
                 fn value(self) -> u8 { self as u8 }
             }
             impl crate::gpio::PinFuncOf<crate::gpio::$pin_ty> for $enum {}
+
+            $(
+                uart_role_impls!(@role $pin_ty, $var, $val);
+            )*
         )*
     };
+}
+
+/// Back a `UARTx_TX` / `UARTx_RX` pin variant with a [`crate::uart::UartTxPin`]
+/// / [`crate::uart::UartRxPin`] impl for the matching UART instance.
+///
+/// The variant name encodes both the instance (`Uart0`..`Uart3`) and the role
+/// (`Tx` / `Rx`); anything else (RTS, CTS, triggers, ...) is ignored.
+macro_rules! uart_role_impls {
+    (@role $pin:ident, Uart0Tx, $val:literal) => {
+        impl crate::uart::UartTxPin<crate::Uart0> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, Uart0Rx, $val:literal) => {
+        impl crate::uart::UartRxPin<crate::Uart0> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, Uart1Tx, $val:literal) => {
+        impl crate::uart::UartTxPin<crate::Uart1> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, Uart1Rx, $val:literal) => {
+        impl crate::uart::UartRxPin<crate::Uart1> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, Uart2Tx, $val:literal) => {
+        impl crate::uart::UartTxPin<crate::Uart2> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, Uart2Rx, $val:literal) => {
+        impl crate::uart::UartRxPin<crate::Uart2> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, Uart3Tx, $val:literal) => {
+        impl crate::uart::UartTxPin<crate::Uart3> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, Uart3Rx, $val:literal) => {
+        impl crate::uart::UartRxPin<crate::Uart3> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    // Not a TX/RX role (RTS, CTS, triggers, ...): nothing to derive.
+    (@role $pin:ident, $_var:ident, $val:literal) => {};
 }
 
 pub mod a {

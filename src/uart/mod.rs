@@ -1,18 +1,19 @@
 //! Universal asynchronous receiver / transmitter.
 //!
-//! Both blocking (`write`/`read`) and, with the `embassy` feature, interrupt
-//! driven `async` transfers are supported. The driver is generic over the pin
-//! roles, which are selected with the type-checked [`crate::gpio::PinFunc`] values
-//! from [`crate::uart::pins`]:
+//! Both blocking (`blocking_write`/`blocking_read` and the single-byte
+//! `blocking_write_byte`/`blocking_read_byte`) and, with the `embassy` feature,
+//! interrupt driven `async` transfers (`write`/`read`/`read_bytes`) are
+//! supported. The TX/RX pad functions are derived from the pin type and the
+//! UART instance through the [`UartTxPin`]/[`UartRxPin`] traits, so the
+//! constructor only needs the pins themselves:
 //!
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! use hal::uart::pins;
 //! let mut uart = hal::uart::Uart::new(
-//!     p.UART1,
-//!     p.PA0,  pins::a::Pin0Func::Uart1Tx,
-//!     p.PA2,  pins::a::Pin2Func::Uart1Rx,
+//!     p.uart1(),
+//!     p.PA0,
+//!     p.PA2,
 //!     hal::uart::Config::default(),
 //! );
 //! uart.blocking_write(b"hello\r\n");
@@ -20,7 +21,7 @@
 
 use embassy_hal_internal::{into_ref, Peripheral, PeripheralRef};
 
-use crate::gpio::{Pin, PinFuncOf};
+use crate::gpio::Pin;
 use crate::mode::{Blocking, Mode};
 
 use instance::Instance;
@@ -44,27 +45,49 @@ pub struct Uart<'d, T: Instance, Tx: Pin, Rx: Pin, M: Mode = Blocking> {
     _mode: core::marker::PhantomData<M>,
 }
 
+/// A pin that can drive the transmit line of UART instance `T`.
+///
+/// Implemented for every pad exposing a `UARTx_TX` function; the associated
+/// [`FUNC`](UartTxPin::FUNC) is the 4-bit `PORTx.FUNC` code that routes the pad
+/// to `T`'s TX path. [`Uart::new`] reads it straight from the pin type, so the
+/// caller never names the function code by hand and a pad that cannot be `T`'s TX
+/// is a compile error.
+pub trait UartTxPin<T: Instance>: crate::gpio::Pin {
+    /// `PORTx.FUNC` code selecting this pad as `T`'s TX.
+    const FUNC: u8;
+}
+
+/// A pin that can drive the receive line of UART instance `T`.
+///
+/// See [`UartTxPin`] for the rationale; this is the RX counterpart.
+pub trait UartRxPin<T: Instance>: crate::gpio::Pin {
+    /// `PORTx.FUNC` code selecting this pad as `T`'s RX.
+    const FUNC: u8;
+}
+
 impl<'d, T: Instance, Tx: Pin, Rx: Pin, M: Mode> Uart<'d, T, Tx, Rx, M> {
     /// Build a UART from its peripheral and the two pads.
     ///
-    /// `tx_func` / `rx_func` pick the alternate function of each pad; only the
-    /// [`crate::gpio::PinFuncOf`] value that belongs to that exact pad type checks,
-    /// so a wrong pad is a compile error.
+    /// The TX/RX `PORTx.FUNC` codes are derived from `tx`/`rx` and the UART
+    /// instance `T` via [`UartTxPin`]/[`UartRxPin`], so only the pins themselves
+    /// are needed; a pad that cannot serve the requested role is a compile error.
     pub fn new(
         peri: impl Peripheral<P = T> + 'd,
         tx: impl Peripheral<P = Tx> + 'd,
-        tx_func: impl PinFuncOf<Tx>,
         rx: impl Peripheral<P = Rx> + 'd,
-        rx_func: impl PinFuncOf<Rx>,
         config: Config,
-    ) -> Self {
+    ) -> Self
+    where
+        Tx: UartTxPin<T>,
+        Rx: UartRxPin<T>,
+    {
         into_ref!(peri, tx, rx);
 
         T::clock().open();
         crate::gpio::acquire::<Tx>();
         crate::gpio::acquire::<Rx>();
-        crate::gpio::set_function::<Tx>(tx_func.value());
-        crate::gpio::set_function::<Rx>(rx_func.value());
+        crate::gpio::set_function::<Tx>(Tx::FUNC);
+        crate::gpio::set_function::<Rx>(Rx::FUNC);
 
         T::set_baudrate(config.baudrate);
         T::configure_line(
@@ -74,6 +97,43 @@ impl<'d, T: Instance, Tx: Pin, Rx: Pin, M: Mode> Uart<'d, T, Tx, Rx, M> {
         );
         // RX threshold of 0 fires as soon as a byte is present; TX threshold of 7
         // lets the async writer refill once the FIFO has drained to 9 free slots.
+        T::configure_fifo(0, 7);
+
+        Self {
+            peri,
+            tx,
+            rx,
+            _mode: core::marker::PhantomData,
+        }
+    }
+
+    /// Async constructor; like [`new`](Self::new) but bound to the `Async` mode so
+    /// the `write`/`read`/`read_bytes` futures are available.
+    #[cfg(feature = "embassy")]
+    pub fn new_async(
+        peri: impl Peripheral<P = T> + 'd,
+        tx: impl Peripheral<P = Tx> + 'd,
+        rx: impl Peripheral<P = Rx> + 'd,
+        config: Config,
+    ) -> Self
+    where
+        Tx: UartTxPin<T>,
+        Rx: UartRxPin<T>,
+    {
+        into_ref!(peri, tx, rx);
+
+        T::clock().open();
+        crate::gpio::acquire::<Tx>();
+        crate::gpio::acquire::<Rx>();
+        crate::gpio::set_function::<Tx>(Tx::FUNC);
+        crate::gpio::set_function::<Rx>(Rx::FUNC);
+
+        T::set_baudrate(config.baudrate);
+        T::configure_line(
+            config.data_bits == DataBits::Data9,
+            config.parity.code(),
+            config.stop_bits == StopBits::Stop2,
+        );
         T::configure_fifo(0, 7);
 
         Self {

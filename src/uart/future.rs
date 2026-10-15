@@ -16,6 +16,14 @@ static WAKER: [AtomicWaker; COUNT] = [const { AtomicWaker::new() }; COUNT];
 
 /// Wake the waiter of one instance; called from the NVIC handler.
 pub(crate) fn on_irq<T: Instance>() {
+    // The UART drives a single combined interrupt line for both TX and RX, so we
+    // cannot tell here which event fired. Quench both sources: the interrupt is
+    // level-sensitive, so leaving either IE bit set would keep the line asserted
+    // and the handler would re-enter in a tight loop, starving the executor
+    // before the woken task runs to read/clear the condition. The awaiting future
+    // re-enables the bit it still needs on its next poll.
+    T::set_rxie(false);
+    T::set_txie(false);
     WAKER[T::index()].wake();
 }
 

@@ -5,7 +5,7 @@
 
 use super::{Instance, Uart};
 use crate::gpio::Pin;
-use crate::mode::{Blocking, Mode};
+use crate::mode::Mode;
 
 #[cfg(feature = "embassy")]
 use super::future;
@@ -20,11 +20,9 @@ impl<'d, T: Instance, Tx: Pin, Rx: Pin, M: Mode> Uart<'d, T, Tx, Rx, M> {
             T::write_data(b);
         }
     }
-}
 
-impl<'d, T: Instance, Tx: Pin, Rx: Pin> Uart<'d, T, Tx, Rx, Blocking> {
-    /// Write a single byte, blocking until there is room.
-    pub fn write(&mut self, byte: u8) {
+    /// Blocking write of a single byte, spinning until there is room.
+    pub fn blocking_write_byte(&mut self, byte: u8) {
         while T::is_tx_fifo_full() {}
         T::write_data(byte);
     }
