@@ -18,52 +18,18 @@ use crate::pac;
 /// The register-block type backing the divider.
 pub(crate) type Block = pac::div::RegisterBlock;
 
-/// Register access shared by the divider.
-pub(crate) mod hw {
-    use super::Block;
-
-    /// Unsigned division: returns `(quotient, remainder)`.
-    ///
-    /// Writing the operands and pulsing `CR.DIVGO` starts the operation; the
-    /// routine busy-waits on `SR.DIVBUSY` and then reads back `QUO`/`REMAIN`.
-    pub(crate) fn divide(regs: &Block, dividend: u32, divisor: u32) -> (u32, u32) {
-        regs.dividend.write(|w| unsafe { w.bits(dividend) });
-        regs.divisor.write(|w| unsafe { w.bits(divisor) });
-        regs.cr.modify(|_, w| w.divgo().set_bit());
-        while regs.sr.read().divbusy().bit() {}
-        let quo = regs.quo.read().bits();
-        let rem = regs.remain.read().bits();
-        (quo, rem)
-    }
-
-    /// Unsigned integer square root of `radicand`.
-    ///
-    /// `CR.ROOTGO` starts the operation and `SR.ROOTBUSY` clears when `ROOT`
-    /// holds the result.
-    pub(crate) fn sqrt(regs: &Block, radicand: u32) -> u32 {
-        regs.radicand.write(|w| unsafe { w.bits(radicand) });
-        regs.cr.modify(|_, w| w.rootgo().set_bit());
-        while regs.sr.read().rootbusy().bit() {}
-        regs.root.read().bits()
-    }
-
-    /// True while either the divider or the root unit is still computing.
-    pub(crate) fn is_busy(regs: &Block) -> bool {
-        regs.sr.read().divbusy().bit() || regs.sr.read().rootbusy().bit()
-    }
-}
-
 pub(crate) mod sealed {
     use cortex_m::peripheral::NVIC;
 
-    use super::{hw, Block, PeripheralClockIndex};
+    use super::{Block, PeripheralClockIndex};
     use cortex_m::interrupt::InterruptNumber;
 
     /// A divider peripheral the driver can talk to.
     ///
     /// Implemented for the singleton in [`crate::mcu`]. The only per-instance
     /// data are the register-block pointer, the clock gate, the async index and
-    /// the NVIC vector; every register operation is forwarded to [`super::hw`].
+    /// the NVIC vector; all register access lives in the default methods of this
+    /// trait.
     pub trait Instance {
         /// Clock gate that powers the divider.
         fn clock() -> PeripheralClockIndex;
@@ -79,14 +45,40 @@ pub(crate) mod sealed {
             unsafe { NVIC::unmask(Self::irq()) };
         }
 
+        /// Unsigned division: returns `(quotient, remainder)`.
+        ///
+        /// Writing the operands and pulsing `CR.DIVGO` starts the operation; the
+        /// routine busy-waits on `SR.DIVBUSY` and then reads back `QUO`/`REMAIN`.
         #[inline(always)]
         fn divide(dividend: u32, divisor: u32) -> (u32, u32) {
-            hw::divide(unsafe { &*Self::regs() }, dividend, divisor)
+            let regs = unsafe { &*Self::regs() };
+            regs.dividend.write(|w| unsafe { w.bits(dividend) });
+            regs.divisor.write(|w| unsafe { w.bits(divisor) });
+            regs.cr.modify(|_, w| w.divgo().set_bit());
+            while regs.sr.read().divbusy().bit() {}
+            let quo = regs.quo.read().bits();
+            let rem = regs.remain.read().bits();
+            (quo, rem)
         }
 
+        /// Unsigned integer square root of `radicand`.
+        ///
+        /// `CR.ROOTGO` starts the operation and `SR.ROOTBUSY` clears when `ROOT`
+        /// holds the result.
         #[inline(always)]
         fn sqrt(radicand: u32) -> u32 {
-            hw::sqrt(unsafe { &*Self::regs() }, radicand)
+            let regs = unsafe { &*Self::regs() };
+            regs.radicand.write(|w| unsafe { w.bits(radicand) });
+            regs.cr.modify(|_, w| w.rootgo().set_bit());
+            while regs.sr.read().rootbusy().bit() {}
+            regs.root.read().bits()
+        }
+
+        /// True while either the divider or the root unit is still computing.
+        #[inline(always)]
+        fn is_busy() -> bool {
+            let regs = unsafe { &*Self::regs() };
+            regs.sr.read().divbusy().bit() || regs.sr.read().rootbusy().bit()
         }
     }
 }

@@ -65,6 +65,6 @@ impl<'d, T: Instance> Div<'d, T, Blocking> {
 
     /// True while the unit is still busy with a previous operation.
     pub fn is_busy(&self) -> bool {
-        instance::hw::is_busy(unsafe { &*T::regs() })
+        T::is_busy()
     }
 }
