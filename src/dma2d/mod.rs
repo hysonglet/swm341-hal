@@ -24,7 +24,7 @@ use embassy_hal_internal::{into_ref, Peripheral, PeripheralRef};
 
 use crate::mode::{Blocking, Mode};
 
-use instance::{hw, Instance, LayerId};
+use instance::{Instance, LayerId};
 
 mod instance;
 
@@ -66,63 +66,60 @@ impl<'d, T: Instance> Dma2d<'d, T, Blocking> {
     }
 
     /// Direct access to one of the three layer register clusters.
-    pub fn layer(&self, layer: LayerIndex) -> Layer<'_> {
+    pub fn layer(&self, layer: LayerIndex) -> Layer<T> {
         Layer {
-            regs: unsafe { &*T::regs() },
             layer: match layer {
                 LayerIndex::L0 => LayerId::L0,
                 LayerIndex::L1 => LayerId::L1,
                 LayerIndex::L2 => LayerId::L2,
             },
+            _marker: core::marker::PhantomData,
         }
     }
 
     /// Program the rectangle size: `lines` rows of `pixels` each.
     pub fn set_size(&self, lines: u16, pixels: u16) {
-        hw::set_size(unsafe { &*T::regs() }, lines, pixels);
+        T::set_size(lines, pixels);
     }
 
     /// Start a transfer of the given `mode`.
     pub fn start(&self, mode: TransferMode) {
-        let regs = unsafe { &*T::regs() };
-        hw::clear_done(regs);
-        hw::start(regs, mode as u8, 0);
+        T::clear_done();
+        T::start(mode as u8, 0);
     }
 
     /// True once the transfer has finished.
     pub fn is_done(&self) -> bool {
-        hw::is_done(unsafe { &*T::regs() })
+        T::is_done()
     }
 
     /// Wait (busy-spin) until the current transfer completes.
     pub fn wait(&self) {
-        while !hw::is_done(unsafe { &*T::regs() }) {}
+        while !T::is_done() {}
     }
 
     /// Copy a `width` x `height` rectangle from `src` to `dst` (bytes per pixel
     /// implied by the caller-set `pfccr` of both layers). The destination is
     /// layer `L0`, the source layer `L1`.
     pub fn copy(&self, src: *const u32, dst: *mut u32, width: u16, height: u16) {
-        let regs = unsafe { &*T::regs() };
-        hw::set_layer_addr(regs, LayerId::L1, src as u32);
-        hw::set_layer_addr(regs, LayerId::L0, dst as u32);
-        hw::set_size(regs, height, width);
-        hw::clear_done(regs);
-        hw::start(regs, TransferMode::MemoryToMemory as u8, 0);
-        while !hw::is_done(regs) {}
+        T::set_layer_addr(LayerId::L1, src as u32);
+        T::set_layer_addr(LayerId::L0, dst as u32);
+        T::set_size(height, width);
+        T::clear_done();
+        T::start(TransferMode::MemoryToMemory as u8, 0);
+        while !T::is_done() {}
     }
 
     /// Fill a `width` x `height` rectangle at `dst` with the constant `color`.
     /// The destination is layer `L0`; `pfccr` selects the pixel format.
     pub fn fill(&self, dst: *mut u32, color: u32, width: u16, height: u16, pfccr: u32) {
-        let regs = unsafe { &*T::regs() };
-        hw::set_layer_addr(regs, LayerId::L0, dst as u32);
-        hw::set_layer_color(regs, LayerId::L0, color);
-        hw::set_layer_pfccr(regs, LayerId::L0, pfccr);
-        hw::set_size(regs, height, width);
-        hw::clear_done(regs);
-        hw::start(regs, TransferMode::Fill as u8, 0);
-        while !hw::is_done(regs) {}
+        T::set_layer_addr(LayerId::L0, dst as u32);
+        T::set_layer_color(LayerId::L0, color);
+        T::set_layer_pfccr(LayerId::L0, pfccr);
+        T::set_size(height, width);
+        T::clear_done();
+        T::start(TransferMode::Fill as u8, 0);
+        while !T::is_done() {}
     }
 }
 
@@ -138,29 +135,29 @@ pub enum LayerIndex {
 }
 
 /// A typed view over one DMA2D layer's registers.
-pub struct Layer<'a> {
-    regs: &'a crate::pac::dma2d::RegisterBlock,
+pub struct Layer<T: Instance> {
     layer: LayerId,
+    _marker: core::marker::PhantomData<T>,
 }
 
-impl Layer<'_> {
+impl<T: Instance> Layer<T> {
     /// Set the layer's memory address (`MAR`).
     pub fn set_addr(&self, addr: u32) {
-        hw::set_layer_addr(self.regs, self.layer, addr);
+        T::set_layer_addr(self.layer, addr);
     }
 
     /// Set the layer's line offset (`OR`).
     pub fn set_offset(&self, offset: u32) {
-        hw::set_layer_offset(self.regs, self.layer, offset);
+        T::set_layer_offset(self.layer, offset);
     }
 
     /// Set the layer's constant/fill colour (`COLOR`).
     pub fn set_color(&self, color: u32) {
-        hw::set_layer_color(self.regs, self.layer, color);
+        T::set_layer_color(self.layer, color);
     }
 
     /// Set the layer's pixel-format / alpha control word (`PFCCR`).
     pub fn set_pfccr(&self, pfccr: u32) {
-        hw::set_layer_pfccr(self.regs, self.layer, pfccr);
+        T::set_layer_pfccr(self.layer, pfccr);
     }
 }

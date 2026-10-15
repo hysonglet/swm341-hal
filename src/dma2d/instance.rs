@@ -24,95 +24,39 @@ pub(crate) type Block = pac::dma2d::RegisterBlock;
 
 /// One of the three DMA2D layers.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum LayerId {
+pub enum LayerId {
     L0 = 0,
     L1 = 1,
     L2 = 2,
 }
 
-/// Register access shared by the DMA2D engine.
-pub(crate) mod hw {
-    use super::Block;
-    use super::LayerId;
-
-    /// Run `$body` with `$c` bound to the concrete register cluster of `$layer`.
-    ///
-    /// The three clusters (`L0`/`L1`/`L2`) are distinct types, so each match arm
-    /// gets its own concrete binding and the body resolves the register accessors.
-    macro_rules! with_layer {
-        ($regs:expr, $layer:expr, |$c:ident| $body:expr) => {
-            match $layer {
-                LayerId::L0 => {
-                    let $c = &$regs.l0;
-                    $body
-                }
-                LayerId::L1 => {
-                    let $c = &$regs.l1;
-                    $body
-                }
-                LayerId::L2 => {
-                    let $c = &$regs.l2;
-                    $body
-                }
+/// Run `$body` with `$c` bound to the concrete register cluster of `$layer`.
+///
+/// The three clusters (`L0`/`L1`/`L2`) are distinct types, so each match arm
+/// gets its own concrete binding and the body resolves the register accessors.
+macro_rules! with_layer {
+    ($regs:expr, $layer:expr, |$c:ident| $body:expr) => {
+        match $layer {
+            LayerId::L0 => {
+                let $c = &$regs.l0;
+                $body
             }
-        };
-    }
-
-    /// Set a layer's source/destination memory address (`MAR`).
-    pub(crate) fn set_layer_addr(regs: &Block, layer: LayerId, addr: u32) {
-        with_layer!(regs, layer, |c| c.mar.write(|w| unsafe { w.bits(addr) }));
-    }
-
-    /// Set a layer's line offset in bytes/format units (`OR`).
-    pub(crate) fn set_layer_offset(regs: &Block, layer: LayerId, offset: u32) {
-        with_layer!(regs, layer, |c| c.or.write(|w| unsafe { w.bits(offset) }));
-    }
-
-    /// Set a layer's fill colour / constant colour (`COLOR`).
-    pub(crate) fn set_layer_color(regs: &Block, layer: LayerId, color: u32) {
-        with_layer!(regs, layer, |c| c.color.write(|w| unsafe { w.bits(color) }));
-    }
-
-    /// Set a layer's pixel-format / alpha control word (`PFCCR`).
-    pub(crate) fn set_layer_pfccr(regs: &Block, layer: LayerId, pfccr: u32) {
-        with_layer!(regs, layer, |c| c.pfccr.write(|w| unsafe { w.bits(pfccr) }));
-    }
-
-    /// Program the transfer size (`NLR`): `lines` rows of `pixels` each.
-    pub(crate) fn set_size(regs: &Block, lines: u16, pixels: u16) {
-        regs.nlr.write(|w| unsafe {
-            w.nline().bits(lines);
-            w.npixel().bits(pixels)
-        });
-    }
-
-    /// Start a transfer with the given `mode`: `0` = memory-to-memory, `1` =
-    /// memory-to-memory with pixel format conversion, `2` = blending, `3` =
-    /// fill (register/colour to memory). `wait` inserts a small stall before the
-    /// next AHB access.
-    pub(crate) fn start(regs: &Block, mode: u8, wait: u16) {
-        regs.cr.write(|w| unsafe {
-            w.mode().bits(mode & 0x3);
-            w.wait().bits(wait & 0x3ff);
-            w.start().set_bit()
-        });
-    }
-
-    /// True once the transfer has finished (`IF.DONE`).
-    pub(crate) fn is_done(regs: &Block) -> bool {
-        regs.if_.read().done().bit()
-    }
-
-    /// Clear the done flag (`IF.DONE`, write-1-to-clear).
-    pub(crate) fn clear_done(regs: &Block) {
-        regs.if_.write(|w| w.done().set_bit());
-    }
+            LayerId::L1 => {
+                let $c = &$regs.l1;
+                $body
+            }
+            LayerId::L2 => {
+                let $c = &$regs.l2;
+                $body
+            }
+        }
+    };
 }
 
 pub(crate) mod sealed {
     use cortex_m::peripheral::NVIC;
 
-    use super::{Block, PeripheralClockIndex};
+    use super::{Block, LayerId, PeripheralClockIndex};
     use cortex_m::interrupt::InterruptNumber;
 
     /// A DMA2D engine the driver can talk to.
@@ -129,6 +73,64 @@ pub(crate) mod sealed {
         #[inline(always)]
         fn unmask_irq() {
             unsafe { NVIC::unmask(Self::irq()) };
+        }
+
+        /// Set a layer's source/destination memory address (`MAR`).
+        fn set_layer_addr(layer: LayerId, addr: u32) {
+            let regs = unsafe { &*Self::regs() };
+            with_layer!(regs, layer, |c| c.mar.write(|w| unsafe { w.bits(addr) }));
+        }
+
+        /// Set a layer's line offset in bytes/format units (`OR`).
+        fn set_layer_offset(layer: LayerId, offset: u32) {
+            let regs = unsafe { &*Self::regs() };
+            with_layer!(regs, layer, |c| c.or.write(|w| unsafe { w.bits(offset) }));
+        }
+
+        /// Set a layer's fill colour / constant colour (`COLOR`).
+        fn set_layer_color(layer: LayerId, color: u32) {
+            let regs = unsafe { &*Self::regs() };
+            with_layer!(regs, layer, |c| c.color.write(|w| unsafe { w.bits(color) }));
+        }
+
+        /// Set a layer's pixel-format / alpha control word (`PFCCR`).
+        fn set_layer_pfccr(layer: LayerId, pfccr: u32) {
+            let regs = unsafe { &*Self::regs() };
+            with_layer!(regs, layer, |c| c.pfccr.write(|w| unsafe { w.bits(pfccr) }));
+        }
+
+        /// Program the transfer size (`NLR`): `lines` rows of `pixels` each.
+        fn set_size(lines: u16, pixels: u16) {
+            let regs = unsafe { &*Self::regs() };
+            regs.nlr.write(|w| unsafe {
+                w.nline().bits(lines);
+                w.npixel().bits(pixels)
+            });
+        }
+
+        /// Start a transfer with the given `mode`: `0` = memory-to-memory, `1` =
+        /// memory-to-memory with pixel format conversion, `2` = blending, `3` =
+        /// fill (register/colour to memory). `wait` inserts a small stall before the
+        /// next AHB access.
+        fn start(mode: u8, wait: u16) {
+            let regs = unsafe { &*Self::regs() };
+            regs.cr.write(|w| unsafe {
+                w.mode().bits(mode & 0x3);
+                w.wait().bits(wait & 0x3ff);
+                w.start().set_bit()
+            });
+        }
+
+        /// True once the transfer has finished (`IF.DONE`).
+        fn is_done() -> bool {
+            let regs = unsafe { &*Self::regs() };
+            regs.if_.read().done().bit()
+        }
+
+        /// Clear the done flag (`IF.DONE`, write-1-to-clear).
+        fn clear_done() {
+            let regs = unsafe { &*Self::regs() };
+            regs.if_.write(|w| w.done().set_bit());
         }
     }
 }
