@@ -69,6 +69,9 @@ impl<'d, T: Instance> Dma<'d, T, Blocking> {
         if ch > 3 {
             return Err(Error::InvalidChannel);
         }
+        if len == 0 {
+            return Ok(());
+        }
         let len = len.min(u16::MAX as usize) as u32;
         T::configure_channel(ch, src as u32, dst as u32, len, req);
         T::clear_channel_done(ch);

@@ -53,8 +53,14 @@ pub(crate) mod sealed {
         fn configure_channel(ch: u8, src: u32, dst: u32, len: u32, req: Option<u8>) {
             let regs = unsafe { &*Self::regs() };
             with_dma_ch!(regs, ch, |c| {
-                c.cr
-                    .write(|w| unsafe { w.len().bits(len).rxen().set_bit().txen().set_bit() });
+                // `LEN` holds (transfer count - 1); the rxen/txen trigger bits are
+                // armed later by `enable_channel`, not here.
+                c.cr.write(|w| unsafe { w.len().bits(len - 1) });
+                // Address mode: both source and destination advance by one byte per
+                // unit (fixed address would re-copy a single location).
+                c.am.write(|w| unsafe {
+                    w.srcam().bits(1).dstam().bits(1).srcbit().bits(0).dstbit().bits(0)
+                });
                 c.src.write(|w| unsafe { w.bits(src) });
                 c.dst.write(|w| unsafe { w.bits(dst) });
                 match req {
@@ -71,15 +77,28 @@ pub(crate) mod sealed {
         #[inline(always)]
         fn enable_channel(ch: u8) {
             let regs = unsafe { &*Self::regs() };
-            let cur = regs.en.read().bits();
-            regs.en.write(|w| unsafe { w.bits(cur | (1u32 << ch)) });
+            // `EN` is a single-bit global gate for the whole DMA controller.
+            regs.en.write(|w| unsafe { w.bits(1) });
+            // Make the per-channel done flag observable (`IF = IE & raw`) and mask
+            // the NVIC interrupt so polling never trips a spurious DMA IRQ.
+            regs.ie.modify(|r, w| unsafe { w.bits(r.bits() | (1u32 << ch)) });
+            regs.im.modify(|r, w| unsafe { w.bits(r.bits() | (1u32 << ch)) });
+            // Trigger this channel: `RXEN` starts a SRC->DST transfer; `TXEN`
+            // would reverse the direction, so it must stay clear.
+            with_dma_ch!(regs, ch, |c| {
+                c.cr.modify(|_, w| w.rxen().set_bit().txen().clear_bit());
+            });
         }
 
         #[inline(always)]
         fn disable_channel(ch: u8) {
             let regs = unsafe { &*Self::regs() };
-            let cur = regs.en.read().bits();
-            regs.en.write(|w| unsafe { w.bits(cur & !(1u32 << ch)) });
+            with_dma_ch!(regs, ch, |c| {
+                c.cr.modify(|_, w| {
+                    w.rxen().clear_bit();
+                    w.txen().clear_bit()
+                });
+            });
         }
 
         #[inline(always)]
