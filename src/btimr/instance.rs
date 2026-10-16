@@ -32,8 +32,11 @@ pub(crate) mod sealed {
         #[inline(always)]
         fn start(period: u32, prediv: u32, clksrc: u8, mode: u8) {
             let regs = unsafe { &*Self::regs() };
+            // `prediv` is the raw value written to PREDIV, so the timer clock is
+            // `PCLK / (prediv + 1)` (prediv = 0 means no prescale).
             regs.prediv.write(|w| unsafe { w.bits(prediv) });
-            regs.load.write(|w| unsafe { w.bits(period) });
+            // The vendor library writes LOAD = period - 1 for exactly `period` ticks.
+            regs.load.write(|w| unsafe { w.bits(period.wrapping_sub(1)) });
             regs.cr.write(|w| unsafe {
                 w.clksrc().bits(clksrc as u8);
                 w.mode().bits(mode as u8)

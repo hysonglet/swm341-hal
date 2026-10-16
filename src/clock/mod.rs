@@ -163,16 +163,23 @@ impl PllConfig {
         }
     }
 
-    /// 150 MHz straight from the 20 MHz internal RC (20 / 1 * 15 * 4 / 8).
+    /// 150 MHz driven from the external 12 MHz crystal (12 / 3 * 75 * 4 / 8).
+    ///
+    /// The internal RC is an unreliable PLL reference on this silicon: feeding the
+    /// PLL from `Hrc` leaves the core on its slow crystal fallback clock, so the
+    /// vendor reference library drives the PLL from `Xtal` instead. Mirror that here.
     #[inline]
     pub const fn hrc_150mhz() -> Self {
-        Self::new(PllSource::Hrc, 1, 15, PllOutDiv::Div8, false)
+        Self::new(PllSource::Xtal, 3, 75, PllOutDiv::Div8, false)
     }
 
-    /// 120 MHz straight from the 20 MHz internal RC (20 / 1 * 12 * 4 / 8).
+    /// 120 MHz driven from the external 12 MHz crystal (12 / 3 * 60 * 4 / 8).
+    ///
+    /// Same reasoning as [`PllConfig::hrc_150mhz`]: the PLL reference is the crystal,
+    /// not the internal RC. These are exactly the vendor library's `SYS_CLK_PLL` values.
     #[inline]
     pub const fn hrc_120mhz() -> Self {
-        Self::new(PllSource::Hrc, 1, 12, PllOutDiv::Div8, false)
+        Self::new(PllSource::Xtal, 3, 60, PllOutDiv::Div8, false)
     }
 
     /// 80 MHz, the configuration the vendor's own example uses.
@@ -257,13 +264,28 @@ impl ClockConfig {
         }
     }
 
-    /// 150 MHz out of the internal RC, which is the datasheet maximum.
+    /// 150 MHz driven from the external 12 MHz crystal via the PLL (the datasheet
+    /// maximum). The PLL reference is the crystal, not the internal RC — see
+    /// [`PllConfig::hrc_150mhz`].
     #[inline]
     pub const fn hrc_150mhz() -> Self {
         Self {
             hrc: HrcSpeed::Hz20,
             xtal_frequency_hz: 12_000_000,
             source: ClockSource::Pll(PllConfig::hrc_150mhz()),
+            tune_flash: true,
+        }
+    }
+
+    /// 120 MHz driven from the external 12 MHz crystal via the PLL. These are the
+    /// vendor library's proven `SYS_CLK_PLL` values (VCO = 960 MHz); prefer this over
+    /// [`ClockConfig::hrc_150mhz`] when the 150 MHz setting is marginal on a given part.
+    #[inline]
+    pub const fn hrc_120mhz() -> Self {
+        Self {
+            hrc: HrcSpeed::Hz20,
+            xtal_frequency_hz: 12_000_000,
+            source: ClockSource::Pll(PllConfig::hrc_120mhz()),
             tune_flash: true,
         }
     }
@@ -433,6 +455,10 @@ fn switch_to_hrc(hrc: HrcSpeed) -> u32 {
 
 /// Move the core onto the `CLK` mux, which must already be fed.
 fn switch_to_clk(source: u8, div8: bool, running_at_hz: u32) {
+    // The vendor library leaves `CLKDIVx_ON` set (gating the internal source-clock
+    // divider) while the core runs from PLL/XTAL. Clearing it feeds the raw divider
+    // output to the core and can hang it, so it stays set here, matching the
+    // reference `switchToPLL`/`switchToXTAL` sequences.
     sys().clkdivx_on.write(|w| unsafe { w.bits(1) });
     sys().clksel.modify(|_, w| unsafe { w.clk().bits(source) });
     sys().clksel.modify(|_, w| w.clk_divx().bit(div8));

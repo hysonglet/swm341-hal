@@ -1,10 +1,19 @@
 //! General purpose timer (TIMR0..TIMR4).
 //!
-//! Each TIMR is a 32-bit down-counter. [`Timr::new`] opens the shared clock gate
-//! and [`Timr::start`] arms it from a period value; [`Timr::value`] reads the
-//! live count and [`Timr::stop`] freezes it. With the `embassy` feature a
-//! [`Timr::delay`](Timr::delay) future waits on the overflow interrupt instead of
-//! busy-spinning.
+//! Each TIMR is a 24-bit down-counter clocked from `PCLK` (which equals `SYSCLK`,
+//! i.e. 120 MHz with [`clock::ClockConfig::hrc_120mhz`]). An 8-bit prescaler
+//! (`Config::prescaler`) divides that clock by `prescaler + 1`. [`Timr::new`] opens
+//! the shared clock gate and [`Timr::start`] arms it from a period value;
+//! [`Timr::value`] reads the live count and [`Timr::stop`] freezes it. Starting also
+//! sets this instance's run-enable bit in `TIMRG.EN` — without it the counter never
+//! runs. With the `embassy` feature a [`Timr::delay`](Timr::delay) future waits on the
+//! overflow interrupt instead of busy-spinning.
+//!
+//! Because the counter is only 24 bits (the `LOAD` field is `0xFFFFFF`), a single
+//! 120 MHz period can hold at most ~139 ms. To time one second, prescale by 10
+//! (`prescaler(9)` -> 12 MHz) and load `12_000_000` ticks. Prefer polling
+//! [`Timr::overflow_flag`] (or the `embassy` future) to busy-waiting on `value() > 0`,
+//! whose back-to-back reads carry heavy wait-states.
 //!
 //! The type-checked pad roles -- external clock input (`TIMRx_IN`) and compare
 //! output (`TIMRx_OUT`) -- live in [`crate::timr::pins`] and are applied with
@@ -14,9 +23,11 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
+//! // One second at the 120 MHz PCLK: 120_000_000 ticks.
 //! let mut timer = hal::timr::Timr::new(p.TIMR0, hal::timr::Config::default());
-//! timer.start(1_000_000);          // count down from 1,000,000
-//! while timer.value() > 0 {}       // busy wait for the underflow
+//! timer.clear_overflow();
+//! timer.start(120_000_000);
+//! while !timer.overflow_flag() {}  // wait for the underflow
 //! ```
 
 use embassy_hal_internal::{into_ref, Peripheral, PeripheralRef};
@@ -67,6 +78,14 @@ impl<'d, T: Instance, M: Mode> Timr<'d, T, M> {
     /// Clear the pending overflow flag.
     pub fn clear_overflow(&self) {
         T::clear_overflow();
+    }
+
+    /// True once the counter has underflowed since the last clear.
+    ///
+    /// Unlike [`Timr::value`], polling this flag does not touch the live count
+    /// register, so it is the reliable way to wait for the timer to elapse.
+    pub fn overflow_flag(&self) -> bool {
+        T::overflow_flag()
     }
 
     /// Enable or disable the overflow interrupt.

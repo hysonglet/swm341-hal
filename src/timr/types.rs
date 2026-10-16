@@ -3,7 +3,9 @@
 /// Configuration of a timer.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Config {
-    /// Value loaded into `TIMR.PREDIV` (0 = divide the timer clock by 1).
+    /// Value written to `TIMR.PREDIV`; the timer clock is `PCLK / (prescaler + 1)`
+    /// (0 = no prescale). The vendor library's `prediv` is the divider itself, so its
+    /// `prediv - 1` equals this field.
     pub prescaler: u32,
     /// Run mode written to `TIMR.CR.MODE`.
     pub mode: u8,

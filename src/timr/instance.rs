@@ -9,8 +9,10 @@
 //!
 //! A TIMR is a 32-bit down-counter: writing `LOAD` arms and starts it, `VALUE` is
 //! the live count, and `CR` only selects the clock source and run mode. `HALT`
-//! freezes the counter. There is no per-instance enable bit; opening the `Timr`
-//! clock gate is what powers the whole family.
+//! freezes the counter. Each instance also has its own run-enable bit in the shared
+//! `TIMRG.EN` register (`TIMRG_EN_TIMR0..4`); the counter does not run until that
+//! bit is set, in addition to the `CLKEN0.TIMR` clock gate opened by
+//! [`crate::clock`].
 
 
 use crate::clock::PeripheralClockIndex;
@@ -34,15 +36,24 @@ pub(crate) mod sealed {
 
 
         /// Arm and start the down-counter from `period` with prescaler `prediv`.
+        ///
+        /// A TIMR only counts once its per-instance run-enable bit in the shared
+        /// `TIMRG.EN` register is set — opening the `CLKEN0.TIMR` peripheral clock
+        /// gate (done by [`crate::clock`]) is not enough on its own.
         #[inline(always)]
         fn start(period: u32, prediv: u32, clksrc: u8, mode: u8) {
             let regs = unsafe { &*Self::regs() };
+            // `prediv` is the raw value written to PREDIV, so the timer clock is
+            // `PCLK / (prediv + 1)` (prediv = 0 means no prescale).
             regs.prediv.write(|w| unsafe { w.bits(prediv) });
-            regs.load.write(|w| unsafe { w.bits(period) });
+            // The vendor library writes LOAD = period - 1 so the counter ticks down
+            // through exactly `period` counts (period-1 .. 0) before underflowing.
+            regs.load.write(|w| unsafe { w.bits(period.wrapping_sub(1)) });
             regs.cr.write(|w| unsafe {
                 w.clksrc().bits(clksrc as u8);
                 w.mode().bits(mode as u8)
             });
+            Self::set_run(true);
         }
 
         /// Current count value (read-only `VALUE`).
@@ -55,8 +66,20 @@ pub(crate) mod sealed {
         /// Freeze the counter; the next `start` re-arms it.
         #[inline(always)]
         fn stop() {
-            let regs = unsafe { &*Self::regs() };
-            regs.halt.write(|w| unsafe { w.bits(1) });
+            Self::set_run(false);
+        }
+
+        /// Set or clear this instance's run-enable bit in `TIMRG.EN`. The SWM341
+        /// gates every TIMR behind its own `TIMRG.EN` bit (0..=4 for TIMR0..=TIMR4),
+        /// addressed by [`InstanceBase::index`]; the counter does not run until the
+        /// bit is set, regardless of the `CLKEN0.TIMR` clock gate.
+        #[inline(always)]
+        fn set_run(enable: bool) {
+            let timrg = unsafe { &*crate::pac::TIMRG::PTR };
+            let mask = 1u32 << Self::index();
+            let cur = timrg.en.read().bits();
+            let next = if enable { cur | mask } else { cur & !mask };
+            timrg.en.write(|w| unsafe { w.bits(next) });
         }
 
         /// True once the counter has underflowed since the last clear.
