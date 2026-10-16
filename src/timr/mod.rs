@@ -11,7 +11,10 @@
 //!
 //! Because the counter is only 24 bits (the `LOAD` field is `0xFFFFFF`), a single
 //! 120 MHz period can hold at most ~139 ms. To time one second, prescale by 10
-//! (`prescaler(9)` -> 12 MHz) and load `12_000_000` ticks. Prefer polling
+//! (`prescaler(9)` -> 12 MHz) and load `12_000_000` ticks — or let
+//! [`Config::from_micros`] pick the prescaler from the interval for you. The run
+//! mode and clock source are selected with the [`RunMode`] and [`ClockSource`] enums
+//! (a pulse counter is `RunMode::Timer` + `ClockSource::External`). Prefer polling
 //! [`Timr::overflow_flag`] (or the `embassy` future) to busy-waiting on `value() > 0`,
 //! whose back-to-back reads carry heavy wait-states.
 //!
@@ -23,10 +26,11 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! // One second at the 120 MHz PCLK: 120_000_000 ticks.
-//! let mut timer = hal::timr::Timr::new(p.TIMR0, hal::timr::Config::default());
+//! // One second at the 120 MHz PCLK; the prescaler is derived from the interval.
+//! let (cfg, load) = hal::timr::Config::from_micros(120_000_000, 1_000_000);
+//! let mut timer = hal::timr::Timr::new(p.TIMR0, cfg);
 //! timer.clear_overflow();
-//! timer.start(120_000_000);
+//! timer.start(load);
 //! while !timer.overflow_flag() {}  // wait for the underflow
 //! ```
 
@@ -60,8 +64,8 @@ impl<'d, T: Instance, M: Mode> Timr<'d, T, M> {
         T::start(
             period,
             self.config.prescaler,
-            self.config.clock_source,
-            self.config.mode,
+            self.config.clock_source.bits(),
+            self.config.mode.bits(),
         );
     }
 

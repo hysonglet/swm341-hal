@@ -34,14 +34,16 @@ pub(crate) mod sealed {
 
         /// Unsigned division: returns `(quotient, remainder)`.
         ///
-        /// Writing the operands and pulsing `CR.DIVGO` starts the operation; the
-        /// routine busy-waits on `SR.DIVBUSY` and then reads back `QUO`/`REMAIN`.
+        /// Writing the operands and pulsing `CR.DIVGO` (`CR.DIVSIGN` set for the
+        /// unsigned interpretation) starts the operation; the routine busy-waits
+        /// on `SR.DIVBUSY` and then reads back `QUO`/`REMAIN`.
         #[inline(always)]
         fn divide(dividend: u32, divisor: u32) -> (u32, u32) {
             let regs = unsafe { &*Self::regs() };
             regs.dividend.write(|w| unsafe { w.bits(dividend) });
             regs.divisor.write(|w| unsafe { w.bits(divisor) });
-            regs.cr.modify(|_, w| w.divgo().set_bit());
+            regs.cr
+                .modify(|_, w| w.divsign().set_bit().divgo().set_bit());
             while regs.sr.read().divbusy().bit() {}
             let quo = regs.quo.read().bits();
             let rem = regs.remain.read().bits();
@@ -50,15 +52,19 @@ pub(crate) mod sealed {
 
         /// Unsigned integer square root of `radicand`.
         ///
-        /// `CR.ROOTGO` starts the operation and `SR.ROOTBUSY` clears when `ROOT`
-        /// holds the result.
+        /// `CR.ROOTGO` starts the operation; `CR.ROOTMOD` is forced to `0` so the
+        /// unit runs in integer mode and `SR.ROOTBUSY` clears when `ROOT` holds
+        /// the result. In integer mode the 16-bit integer part sits in the upper
+        /// half of `ROOT`, so the value is shifted right by 16 to drop the (zero)
+        /// fractional bits.
         #[inline(always)]
         fn sqrt(radicand: u32) -> u32 {
             let regs = unsafe { &*Self::regs() };
             regs.radicand.write(|w| unsafe { w.bits(radicand) });
-            regs.cr.modify(|_, w| w.rootgo().set_bit());
+            regs.cr
+                .modify(|_, w| w.rootmod().clear_bit().rootgo().set_bit());
             while regs.sr.read().rootbusy().bit() {}
-            regs.root.read().bits()
+            regs.root.read().bits() >> 16
         }
 
         /// True while either the divider or the root unit is still computing.
