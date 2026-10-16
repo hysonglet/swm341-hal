@@ -63,6 +63,8 @@ pub mod devices {
         Lcd,
         // 12-bit digital-to-analog converter.
         Dac,
+        // Data Watchpoint and Trace (Armv8-M core debug component).
+        Dwt,
     );
 
     pub use peripherals::*;

@@ -108,6 +108,9 @@ required-features = ["embassy"]
 name = "clock_block"
 
 [[example]]
+name = "dwt_block"
+
+[[example]]
 name = "hello_rtt"
 
 [profile.release]

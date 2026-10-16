@@ -59,6 +59,10 @@ pub mod dma2d;
 pub mod jpeg;
 pub mod lcdc;
 
+// Core debug component (Armv8-M DWT), not a SWM341 peripheral: no clock gate,
+// no NVIC vector -- switched on through the core's Debug Control Block.
+pub mod dwt;
+
 #[doc(hidden)]
 pub mod vector_table;
 
@@ -71,6 +75,8 @@ pub use mcu::devices::{
     Adc0, Adc1, Btimr0, Btimr1, Btimr2, Btimr3, Btimr4, Btimr5, Btimr6, Btimr7, Btimr8, Btimr9,
     Btimr10, Btimr11, Cordic, Dac, Dma, Div, Dma2d, Hall, Jpeg, Lcd, Pwm0, Pwm1, Pwm2, Pwm3, Pwm4, Rtc,
     Sdio, Timr0, Timr1, Timr2, Timr3, Timr4, Wdt,
+    // Data Watchpoint and Trace (Armv8-M core debug component).
+    Dwt,
 };
 
 impl Peripherals {
@@ -253,6 +259,10 @@ impl Peripherals {
     /// Take the DAC singleton.
     pub fn dac(&self) -> Dac {
         unsafe { Dac::steal() }
+    }
+    /// Take the DWT (Data Watchpoint and Trace) core component singleton.
+    pub fn dwt(&self) -> Dwt {
+        unsafe { Dwt::steal() }
     }
 }
 
