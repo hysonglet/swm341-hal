@@ -3,10 +3,10 @@
 
 //! Blocking comparator sample: enable CMP0 and poll its output over RTT.
 //!
-//! CMP0's positive input is the `CMP0+` pad and its negative input is the
-//! `CMP0−` pad (or the internal reference when [`NegativeSource::InternalVref`]
-//! is selected). Wire the pads appropriately on the board to see the output
-//! toggle as the positive input crosses the negative input threshold.
+//! CMP0's positive input is PA2 (`ACMP0_INP`) and its negative input is PB12
+//! (`ACMP0_INN`); both are routed through the type-checked
+//! [`swm341_hal::cmp::Cmp::add_positive_pin`] / `add_negative_pin` API. The
+//! output toggles as the positive input crosses the negative input threshold.
 
 use panic_halt as _;
 use rtt_target::{rprintln, rtt_init_print};
@@ -24,7 +24,7 @@ fn main() -> ! {
 
     rprintln!("cmp_block: started, polling CMP0 output");
 
-    let cmp = hal::cmp::Cmp::new(
+    let mut cmp = hal::cmp::Cmp::new(
         p.cmp0(),
         hal::cmp::Config {
             enable: true,
@@ -32,6 +32,11 @@ fn main() -> ! {
             ..Default::default()
         },
     );
+
+    // PA2 -> ACMP0 positive input, PB12 -> ACMP0 negative input. The handles
+    // keep both pads routed for as long as they are alive.
+    let _pos = cmp.add_positive_pin(p.PA2);
+    let _neg = cmp.add_negative_pin(p.PB12);
 
     let mut prev = cmp.output();
     rprintln!("cmp_block: initial CMP0 output = {}", prev as u8);

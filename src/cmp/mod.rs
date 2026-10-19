@@ -9,10 +9,20 @@
 //! All three units share one `ACMP` interrupt; the driver demultiplexes it
 //! inside the ISR so each unit gets its own async waker.
 //!
+//! Each comparator's inputs are fixed pads -- there is no mux between the
+//! comparator and its pad, only the shared analog path (function code `15`).
+//! The type-checked pad roles (`ACMPx_INP` / `ACMPx_INN`) live in
+//! [`crate::cmp::pins`], and the high-level [`Cmp::add_positive_pin`] /
+//! [`Cmp::add_negative_pin`] route a pad for you, so you typically don't touch
+//! [`crate::gpio::set_function`] directly.
+//!
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
 //! let mut cmp = hal::cmp::Cmp::new(p.CMP0, hal::cmp::Config::default());
+//! // PA2 is ACMP0's positive input, PB12 its negative input.
+//! cmp.add_positive_pin(p.PA2);
+//! cmp.add_negative_pin(p.PB12);
 //! let high = cmp.output();
 //! ```
 
@@ -25,8 +35,69 @@ use instance::Instance;
 #[cfg(feature = "embassy")]
 mod future;
 mod instance;
+pub mod pins;
 pub mod types;
 pub use types::*;
+
+/// A GPIO pad that can serve as a comparator's positive (non-inverting) input.
+///
+/// Implemented for every pin exposing an `ACMPx_INP` analog function.
+/// [`FUNC`](CmpPositivePin::FUNC) is the 4-bit `PORTx.FUNC` code (`15`) that
+/// selects the analog path, so the driver can route a pad from its type alone.
+pub trait CmpPositivePin<T: Instance>: crate::gpio::Pin {
+    /// `PORTx.FUNC` code routing the pad to the analog path (`15`).
+    const FUNC: u8;
+}
+
+/// A GPIO pad that can serve as a comparator's negative (inverting) input.
+///
+/// Implemented for every pin exposing an `ACMPx_INN` analog function.
+pub trait CmpNegativePin<T: Instance>: crate::gpio::Pin {
+    /// `PORTx.FUNC` code routing the pad to the analog path (`15`).
+    const FUNC: u8;
+}
+
+macro_rules! cmp_positive_pins {
+    ($($pin:ty => $cmp:ty),* $(,)?) => {
+        $(
+            impl CmpPositivePin<$cmp> for $pin {
+                const FUNC: u8 = 15;
+            }
+        )*
+    };
+}
+
+macro_rules! cmp_negative_pins {
+    ($($pin:ty => $cmp:ty),* $(,)?) => {
+        $(
+            impl CmpNegativePin<$cmp> for $pin {
+                const FUNC: u8 = 15;
+            }
+        )*
+    };
+}
+
+// Straight from the vendor pin matrix: each comparator has exactly one
+// positive and one negative pad.
+cmp_positive_pins! {
+    crate::gpio::PA2 => crate::Cmp0,
+    crate::gpio::PA1 => crate::Cmp1,
+    crate::gpio::PA0 => crate::Cmp2,
+}
+cmp_negative_pins! {
+    crate::gpio::PB12 => crate::Cmp0,
+    crate::gpio::PB5  => crate::Cmp1,
+    crate::gpio::PB4  => crate::Cmp2,
+}
+
+/// An analog pad that has been routed to one of a comparator's inputs.
+///
+/// Returned by [`Cmp::add_positive_pin`] / [`Cmp::add_negative_pin`]; it owns
+/// the pad so its `PORTx.FUNC` routing stays in effect for as long as the
+/// handle lives.
+pub struct CmpInput<'d, P: crate::gpio::Pin> {
+    _flex: crate::gpio::Flex<'d, P>,
+}
 
 /// A comparator unit driven by its peripheral clock (the analog block).
 #[allow(dead_code)]
@@ -53,6 +124,37 @@ impl<'d, T: Instance, M: Mode> Cmp<'d, T, M> {
     /// Choose what drives this unit's negative input.
     pub fn set_negative_source(&self, src: NegativeSource) {
         T::set_negative_source(src);
+    }
+
+    /// Route `pin` to this comparator's positive input and return a handle.
+    ///
+    /// This replaces the manual `Flex::new(pin).set_func(..)` dance: the pad a
+    /// comparator can use is known from its type, so the driver programs
+    /// `PORTx.FUNC` (code `15`, the analog path) for you.
+    pub fn add_positive_pin<P: CmpPositivePin<T>>(
+        &mut self,
+        pin: impl Peripheral<P = P> + 'd,
+    ) -> CmpInput<'d, P> {
+        let flex = crate::gpio::Flex::new(pin);
+        // Float the pad: a leftover pull resistor biases the comparison.
+        crate::gpio::set_pull::<P>(crate::gpio::Pull::None);
+        crate::gpio::set_function::<P>(P::FUNC);
+        CmpInput { _flex: flex }
+    }
+
+    /// Route `pin` to this comparator's negative input and return a handle.
+    ///
+    /// Also switches the comparator's negative source to the external pad (it
+    /// would otherwise keep comparing against the internal reference).
+    pub fn add_negative_pin<P: CmpNegativePin<T>>(
+        &mut self,
+        pin: impl Peripheral<P = P> + 'd,
+    ) -> CmpInput<'d, P> {
+        let flex = crate::gpio::Flex::new(pin);
+        crate::gpio::set_pull::<P>(crate::gpio::Pull::None);
+        crate::gpio::set_function::<P>(P::FUNC);
+        T::set_negative_source(NegativeSource::ExternalPin);
+        CmpInput { _flex: flex }
     }
 
     /// Read the current comparator output (`true` => positive > negative).
