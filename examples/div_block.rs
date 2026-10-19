@@ -34,7 +34,7 @@ fn main() -> ! {
     // Integer square root: floor(sqrt(2_000_000)) == 1414.
     let root = div.sqrt(2_000_000);
     rprintln!("sqrt: floor(sqrt({})) = {}", 2_000_000, root);
-    // assert_eq!(root, 1414);
+    assert_eq!(root, 1414);
 
     // A few more quick checks.
     let r = div.divide(0xFFFF_FFFFu32, 100_000);
