@@ -80,6 +80,10 @@ name = "embassy_spi_slave"
 required-features = ["embassy"]
 
 [[example]]
+name = "spi_dual"
+required-features = ["embassy"]
+
+[[example]]
 name = "timr_block"
 
 [[example]]
@@ -112,6 +116,9 @@ name = "dwt_block"
 
 [[example]]
 name = "hello_rtt"
+
+[[example]]
+name = "wdt_block"
 
 [profile.release]
 codegen-units = 1
