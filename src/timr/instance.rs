@@ -24,6 +24,7 @@ pub(crate) type Block = pac::timr0::RegisterBlock;
 pub(crate) mod sealed {
 
     use super::Block;
+    use crate::timr::types::{ClockSource, RunMode};
 
     /// A TIMR peripheral the driver can talk to.
     ///
@@ -41,7 +42,7 @@ pub(crate) mod sealed {
         /// `TIMRG.EN` register is set — opening the `CLKEN0.TIMR` peripheral clock
         /// gate (done by [`crate::clock`]) is not enough on its own.
         #[inline(always)]
-        fn start(period: u32, prediv: u32, clksrc: u8, mode: u8) {
+        fn start(period: u32, prediv: u32, clksrc: ClockSource, mode: RunMode) {
             let regs = unsafe { &*Self::regs() };
             // `prediv` is the raw value written to PREDIV, so the timer clock is
             // `PCLK / (prediv + 1)` (prediv = 0 means no prescale).
@@ -50,8 +51,8 @@ pub(crate) mod sealed {
             // through exactly `period` counts (period-1 .. 0) before underflowing.
             regs.load.write(|w| unsafe { w.bits(period.wrapping_sub(1)) });
             regs.cr.write(|w| unsafe {
-                w.clksrc().bits(clksrc as u8);
-                w.mode().bits(mode as u8)
+                w.clksrc().bits(clksrc.bits());
+                w.mode().bits(mode.bits())
             });
             Self::set_run(true);
         }

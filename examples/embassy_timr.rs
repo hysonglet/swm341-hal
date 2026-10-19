@@ -7,7 +7,11 @@
 //! period against the wall clock and tell a *flood* from a *hard hang*.
 //!
 //! IMPORTANT: `timer.delay(n)` counts `n` TIMER TICKS, not milliseconds.
-//! At 150 MHz HRC with prescaler 0, one tick is ~6.67 ns, so:
+//! The 24-bit counter can't hold 150M ticks at prescaler 0, so `delay` now
+//! auto-picks the smallest 8-bit prescaler (via `Config::prescale_for_ticks`)
+//! that keeps `n` ticks inside `LOAD` — `delay(150_000_000)` therefore waits
+//! exactly one second at the 150 MHz PCLK (prescaler 9, load 12M). At a smaller
+//! `n`:
 //!   - `delay(150)`   ≈ 1  µs   (will flood RTT)
 //!   - `delay(1500)`  ≈ 10 µs   (still floods, 10x slower than 150)
 //!   - `delay(150_000_000)` ≈ 1 s (the intended ~1 s cadence)

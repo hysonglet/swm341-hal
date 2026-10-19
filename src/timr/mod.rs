@@ -64,8 +64,8 @@ impl<'d, T: Instance, M: Mode> Timr<'d, T, M> {
         T::start(
             period,
             self.config.prescaler,
-            self.config.clock_source.bits(),
-            self.config.mode.bits(),
+            self.config.clock_source,
+            self.config.mode,
         );
     }
 
