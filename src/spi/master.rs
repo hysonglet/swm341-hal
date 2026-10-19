@@ -82,8 +82,7 @@ impl<'d, T: Instance, Sck: Pin, Mosi: Pin, Miso: Pin, Cs: Pin, M: Mode>
         crate::gpio::set_function::<Miso>(miso_func.value());
         crate::gpio::set_function::<Cs>(cs_func.value());
 
-        let clk =
-            crate::clock::current_system_clock().expect("peripheral clock not running") as u32;
+        let clk = crate::clock::sys_core_clock();
         // SCK = sysclk / (2 * (clkdiv + 1)); pick the smallest divider that meets
         // the requested rate and clamp it into the 3-bit field.
         let clkdiv = ((clk + 2 * config.frequency.max(1) - 1) / (2 * config.frequency.max(1)))
@@ -113,8 +112,7 @@ impl<'d, T: Instance, Sck: Pin, Mosi: Pin, Miso: Pin, Cs: Pin, M: Mode>
 
     /// Recompute the clock divider for a new SCK frequency.
     pub fn set_frequency(&mut self, frequency: u32) {
-        let clk =
-            crate::clock::current_system_clock().expect("peripheral clock not running") as u32;
+        let clk = crate::clock::sys_core_clock();
         let clkdiv = ((clk + 2 * frequency.max(1) - 1) / (2 * frequency.max(1)))
             .saturating_sub(1)
             .min(7) as u8;

@@ -58,7 +58,7 @@ pub(crate) mod sealed {
         fn set_clock(frequency: u32) {
             let regs = unsafe { &*Self::regs() };
             let clk =
-                crate::clock::current_system_clock().expect("peripheral clock not running") as u32;
+                crate::clock::sys_core_clock();
             let target = clk / frequency.max(1);
             // SCL period (in HCLK cycles) = (DIV + 1) * (SCLL + SCLH + 2);
             // pick the smallest DIV that keeps each half within the 8-bit

@@ -139,6 +139,17 @@ pub(crate) mod sealed {
             regs.ie.modify(|_, w| w.rfthr().bit(enable));
         }
 
+        /// Clear the RX-threshold interrupt flag (`IF.RFTHR`).
+        ///
+        /// `IF` is write-1-to-clear and keeps the controller's interrupt line
+        /// asserted for as long as a flag is set, so an ISR that does not
+        /// quench it is re-entered by the NVIC forever.
+        #[inline(always)]
+        fn clear_rx_threshold_flag() {
+            let regs = unsafe { &*Self::regs() };
+            regs.if_.write(|w| w.rfthr().set_bit());
+        }
+
         // -- SPI slave (peripheral) mode --
 
         /// Put the block in slave mode: clear `MSTR`, keep `EN` and the line config.

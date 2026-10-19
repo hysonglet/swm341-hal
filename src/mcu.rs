@@ -63,8 +63,14 @@ pub mod devices {
         Lcd,
         // 12-bit digital-to-analog converter.
         Dac,
+        // Analog comparators (CMP0/CMP1/CMP2, sharing the `ACMP` interrupt).
+        Cmp0, Cmp1, Cmp2,
+        // On-chip operational amplifiers (power control in `SYS.OPACR`).
+        Opa0, Opa1, Opa2, Opa3,
         // Data Watchpoint and Trace (Armv8-M core debug component).
         Dwt,
+        // Serial Flash Controller (dedicated SPI-NOR master, pads D3..D8).
+        Sfc,
     );
 
     pub use peripherals::*;

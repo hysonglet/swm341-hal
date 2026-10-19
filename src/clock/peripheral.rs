@@ -60,6 +60,14 @@ pub enum PeripheralClockIndex {
     /// HALL (hall-sensor interface, exposed through `TIMRG`). Like DMA, the SVD
     /// omits its clock gate, so it is treated as always-on.
     Hall,
+    /// Analog comparator (ACMP). The SVD omits its clock gate (the registers
+    /// live inside `SYS` alongside the always-on analog block), so it is
+    /// treated as always-on.
+    Acmp,
+    /// Operational amplifiers (OPA0..OPA3). Like the comparators their only
+    /// control (`SYS.OPACR`) lives inside the always-on analog `SYS` block and
+    /// the SVD models no per-OPA gate, so they are treated as always-on.
+    Opa,
 }
 
 /// Binds every index to the single bit that gates it.
@@ -148,5 +156,7 @@ impl_clock_gates! {
     always_on {
         Dma,
         Hall,
+        Acmp,
+        Opa,
     }
 }

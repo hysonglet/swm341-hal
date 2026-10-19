@@ -93,6 +93,9 @@ name = "pwm_block"
 name = "adc_block"
 
 [[example]]
+name = "cmp_block"
+
+[[example]]
 name = "embassy_timr"
 required-features = ["embassy"]
 
@@ -119,6 +122,9 @@ name = "hello_rtt"
 
 [[example]]
 name = "wdt_block"
+
+[[example]]
+name = "sfc_flash_id"
 
 [profile.release]
 codegen-units = 1

@@ -5,6 +5,7 @@
 //! its `poll`, so no buffer storage lives in a static.
 
 use core::future::poll_fn;
+use core::sync::atomic::{AtomicU32, Ordering};
 use core::task::Poll;
 
 use embassy_sync::waitqueue::AtomicWaker;
@@ -14,9 +15,64 @@ use super::Error;
 
 static WAKER: [AtomicWaker; COUNT] = [const { AtomicWaker::new() }; COUNT];
 
+/// CS edge events latched by the ISR, one word per instance.
+///
+/// The handler has to quench `IF` before returning (see [`on_irq`]), which
+/// erases the very flag the slave futures wait for, so an edge that was already
+/// acknowledged is remembered here until a future consumes it.
+static EVENTS: [AtomicU32; COUNT] = [const { AtomicU32::new(0) }; COUNT];
+
+const EV_CS_FALL: u32 = 1 << 0;
+const EV_CS_RISE: u32 = 1 << 1;
+
+/// Take a latched event, reporting whether it was pending.
+fn take_event(idx: usize, mask: u32) -> bool {
+    EVENTS[idx].fetch_and(!mask, Ordering::SeqCst) & mask != 0
+}
+
+/// Consume a CS-fall edge: either still pending in `IF` (the edge happened
+/// before the future armed the interrupt) or already quenched by the ISR.
+fn take_cs_fall<T: Instance>(idx: usize) -> bool {
+    let live = T::is_cs_fall();
+    if live {
+        T::clear_cs_fall();
+    }
+    live || take_event(idx, EV_CS_FALL)
+}
+
+/// Consume a CS-rise edge; see [`take_cs_fall`].
+fn take_cs_rise<T: Instance>(idx: usize) -> bool {
+    let live = T::is_cs_rise();
+    if live {
+        T::clear_cs_rise();
+    }
+    live || take_event(idx, EV_CS_RISE)
+}
+
 /// Wake the waiter of one instance; called from the NVIC handler.
+///
+/// The handler must quench every interrupt source before returning: `IF` is
+/// write-1-to-clear and keeps the SPI interrupt line asserted for as long as a
+/// flag is set, so a handler that only wakes leaves the NVIC re-entering itself
+/// forever and the executor never runs again. Every future re-arms the sources
+/// it needs on each poll, so clearing them here costs nothing.
 pub(crate) fn on_irq<T: Instance>() {
-    WAKER[T::index()].wake();
+    let idx = T::index();
+    if T::is_cs_fall() {
+        EVENTS[idx].fetch_or(EV_CS_FALL, Ordering::SeqCst);
+        T::clear_cs_fall();
+    }
+    if T::is_cs_rise() {
+        EVENTS[idx].fetch_or(EV_CS_RISE, Ordering::SeqCst);
+        T::clear_cs_rise();
+    }
+    // The RX-threshold flag is latched as well. Nothing has to be remembered
+    // for it: the read side takes its bytes straight from `STAT.rfne`.
+    T::clear_rx_threshold_flag();
+    T::set_rx_threshold_irq(false);
+    T::set_cs_fall_irq(false);
+    T::set_cs_rise_irq(false);
+    WAKER[idx].wake();
 }
 
 /// Full-duplex transfer once the hardware has room / data.
@@ -90,8 +146,7 @@ pub(crate) async fn slave_wait_start<T: Instance>() -> Result<(), Error> {
     let idx = T::index();
     poll_fn(|cx| {
         WAKER[idx].register(cx.waker());
-        if T::is_cs_fall() {
-            T::clear_cs_fall();
+        if take_cs_fall::<T>(idx) {
             return Poll::Ready(Ok(()));
         }
         T::set_cs_fall_irq(true);
@@ -106,8 +161,7 @@ pub(crate) async fn slave_wait_end<T: Instance>() -> Result<(), Error> {
     let idx = T::index();
     poll_fn(|cx| {
         WAKER[idx].register(cx.waker());
-        if T::is_cs_rise() {
-            T::clear_cs_rise();
+        if take_cs_rise::<T>(idx) {
             return Poll::Ready(Ok(()));
         }
         T::set_cs_rise_irq(true);
@@ -125,8 +179,7 @@ pub(crate) async fn slave_read_byte<T: Instance>() -> Result<u8, Error> {
         if T::is_rx_fifo_not_empty() {
             return Poll::Ready(Ok(T::read_data()));
         }
-        if T::is_cs_rise() {
-            T::clear_cs_rise();
+        if take_cs_rise::<T>(idx) {
             return Poll::Ready(Err(Error::TransferEnded));
         }
         T::set_rx_threshold_irq(true);
@@ -168,8 +221,7 @@ pub(crate) async fn slave_transfer<T: Instance>(
     poll_fn(|cx| {
         WAKER[idx].register(cx.waker());
         if !started {
-            if T::is_cs_fall() {
-                T::clear_cs_fall();
+            if take_cs_fall::<T>(idx) {
                 started = true;
             } else {
                 T::set_cs_fall_irq(true);
@@ -177,8 +229,7 @@ pub(crate) async fn slave_transfer<T: Instance>(
                 return Poll::Pending;
             }
         }
-        if T::is_cs_rise() {
-            T::clear_cs_rise();
+        if take_cs_rise::<T>(idx) {
             while T::is_rx_fifo_not_empty() {
                 let _ = T::read_data();
             }

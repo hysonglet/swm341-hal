@@ -63,7 +63,7 @@ pub(crate) mod sealed {
         fn set_baudrate(baudrate: u32) {
             let regs = unsafe { &*Self::regs() };
             let clk =
-                crate::clock::current_system_clock().expect("peripheral clock not running") as u32;
+                crate::clock::sys_core_clock();
             // BAUD = (clk / rate - 1) / 16, FRAC = (clk / rate - 1) % 16, so the
             // realised rate is clk / ((BAUD * 16) + FRAC + 1).
             let step = (clk / baudrate.max(1)).saturating_sub(1);

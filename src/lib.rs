@@ -28,36 +28,39 @@ pub use embassy_hal_internal::{Peripheral, PeripheralRef};
 /// Raw register access crate backing this HAL.
 pub use swm341_pac as pac;
 
+pub mod adc;
+pub mod can;
 pub mod clock;
+pub mod cordic;
+pub mod dac;
+pub mod dma;
 #[cfg(feature = "embassy")]
 pub mod embassy;
 pub mod flash;
 pub mod gpio;
+pub mod hall;
 pub mod i2c;
 pub mod instance_base;
 pub mod interrupt;
 pub mod mcu;
 pub mod mode;
-pub mod spi;
-pub mod uart;
-pub mod timr;
 pub mod pwm;
-pub mod adc;
-pub mod dac;
-pub mod can;
-pub mod cordic;
-pub mod dma;
-pub mod hall;
 pub mod rtc;
+pub mod spi;
+pub mod timr;
+pub mod uart;
 
 // Newly added peripheral drivers, following the `uart`/`timr` five-file layout.
-pub mod div;
-pub mod wdt;
 pub mod btimr;
-pub mod sdio;
+pub mod cmp;
+pub mod div;
 pub mod dma2d;
 pub mod jpeg;
 pub mod lcdc;
+pub mod opa;
+pub mod sdio;
+pub mod sfc;
+pub mod wdt;
 
 // Core debug component (Armv8-M DWT), not a SWM341 peripheral: no clock gate,
 // no NVIC vector -- switched on through the core's Debug Control Block.
@@ -70,14 +73,57 @@ pub use mcu::Peripherals;
 
 // Serial peripherals are generated under `mcu::serial`; re-export them at the
 // crate root so drivers can name them directly.
-pub use mcu::serial::{Can0, Can1, I2c0, I2c1, Spi0, Spi1, Uart0, Uart1, Uart2, Uart3};
 pub use mcu::devices::{
-    Adc0, Adc1, Btimr0, Btimr1, Btimr2, Btimr3, Btimr4, Btimr5, Btimr6, Btimr7, Btimr8, Btimr9,
-    Btimr10, Btimr11, Cordic, Dac, Dma, Div, Dma2d, Hall, Jpeg, Lcd, Pwm0, Pwm1, Pwm2, Pwm3, Pwm4, Rtc,
-    Sdio, Timr0, Timr1, Timr2, Timr3, Timr4, Wdt,
+    Adc0,
+    Adc1,
+    Btimr0,
+    Btimr1,
+    Btimr10,
+    Btimr11,
+    Btimr2,
+    Btimr3,
+    Btimr4,
+    Btimr5,
+    Btimr6,
+    Btimr7,
+    Btimr8,
+    Btimr9,
+    // Analog comparators (CMP0/CMP1/CMP2).
+    Cmp0,
+    Cmp1,
+    Cmp2,
+    Cordic,
+    Dac,
+    Div,
+    Dma,
+    Dma2d,
     // Data Watchpoint and Trace (Armv8-M core debug component).
     Dwt,
+    Hall,
+    Jpeg,
+    Lcd,
+    // On-chip operational amplifiers (OPA0..OPA3).
+    Opa0,
+    Opa1,
+    Opa2,
+    Opa3,
+    Pwm0,
+    Pwm1,
+    Pwm2,
+    Pwm3,
+    Pwm4,
+    Rtc,
+    Sdio,
+    // Serial Flash Controller (dedicated SPI-NOR master, pads D3..D8).
+    Sfc,
+    Timr0,
+    Timr1,
+    Timr2,
+    Timr3,
+    Timr4,
+    Wdt,
 };
+pub use mcu::serial::{Can0, Can1, I2c0, I2c1, Spi0, Spi1, Uart0, Uart1, Uart2, Uart3};
 
 impl Peripherals {
     /// Take the UART0 singleton.
@@ -263,6 +309,38 @@ impl Peripherals {
     /// Take the DWT (Data Watchpoint and Trace) core component singleton.
     pub fn dwt(&self) -> Dwt {
         unsafe { Dwt::steal() }
+    }
+    /// Take the CMP0 (analog comparator 0) singleton.
+    pub fn cmp0(&self) -> Cmp0 {
+        unsafe { Cmp0::steal() }
+    }
+    /// Take the CMP1 (analog comparator 1) singleton.
+    pub fn cmp1(&self) -> Cmp1 {
+        unsafe { Cmp1::steal() }
+    }
+    /// Take the CMP2 (analog comparator 2) singleton.
+    pub fn cmp2(&self) -> Cmp2 {
+        unsafe { Cmp2::steal() }
+    }
+    /// Take the OPA0 (operational amplifier 0) singleton.
+    pub fn opa0(&self) -> Opa0 {
+        unsafe { Opa0::steal() }
+    }
+    /// Take the OPA1 (operational amplifier 1) singleton.
+    pub fn opa1(&self) -> Opa1 {
+        unsafe { Opa1::steal() }
+    }
+    /// Take the OPA2 (operational amplifier 2) singleton.
+    pub fn opa2(&self) -> Opa2 {
+        unsafe { Opa2::steal() }
+    }
+    /// Take the OPA3 (operational amplifier 3) singleton.
+    pub fn opa3(&self) -> Opa3 {
+        unsafe { Opa3::steal() }
+    }
+    /// Take the SFC (Serial Flash Controller) singleton.
+    pub fn sfc(&self) -> Sfc {
+        unsafe { Sfc::steal() }
     }
 }
 
