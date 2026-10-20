@@ -1,12 +1,12 @@
 //! NVIC interrupt vectors.
 //!
 //! The SVD that `swm341-pac` is generated from only describes the vectors
-//! 0..=28, while the silicon implements 0..=88 (see the vendor header
+//! 0..=28, while the silicon implements 0..=90 (see the vendor header
 //! `CSL/CMSIS/DeviceSupport/SWM341.h`). The vectors above index 28 therefore
 //! have no `pac::Interrupt` variant and no weak alias in the PAC's `device.x`.
 //!
 //! This crate closes that gap with a single unified [`ExtendedInterrupt`]
-//! enumeration that lists *all* 89 vectors (0..=88) with their real NVIC index
+//! enumeration that lists *all* 91 vectors (0..=90) with their real NVIC index
 //! as the discriminant. Every vector also gets an upper-case datasheet alias
 //! (`UART0`, `GPIOA`, ...), so name checks and the `device.x` weak aliases
 //! resolve against one type. Because `ExtendedInterrupt` implements
@@ -22,13 +22,13 @@ pub use cortex_m::interrupt::InterruptNumber;
 
 use cortex_m::peripheral::NVIC;
 
-/// All 89 NVIC vectors of the SWM341, indexed by their real NVIC number.
+/// All 91 NVIC vectors of the SWM341, indexed by their real NVIC number.
 ///
 /// The discriminant of every variant is the NVIC index used by the hardware
 /// and by [`crate::vector_table`]. Vectors 0..=28 are the ones the SVD
 /// describes (spelled to match the datasheet, which differs from the SVD for
 /// several entries: `PWM0` vs `PWM_CH0`, `ADC0` vs `SARADC0`, `TIMR2` vs
-/// `TIMER2`, ...); vectors 29..=88 are the ones the SVD omits entirely.
+/// `TIMER2`, ...); vectors 29..=90 are the ones the SVD omits entirely.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u16)]
 #[non_exhaustive]
@@ -63,7 +63,7 @@ pub enum ExtendedInterrupt {
     Btimr1 = 26,
     Pwm4 = 27,
     Hall3 = 28,
-    // --- vectors 29..=88 (missing from the SVD) ---
+    // --- vectors 29..=90 (missing from the SVD) ---
     Btimr2 = 29,
     I2c1 = 30,
     Btimr3 = 31,
@@ -124,6 +124,10 @@ pub enum ExtendedInterrupt {
     Btimr10 = 86,
     Btimr11 = 87,
     Dma2d = 88,
+    /// Digital camera interface (no driver yet).
+    Dcmi = 89,
+    /// Quadrature encoder interface.
+    Qei = 90,
 }
 
 unsafe impl InterruptNumber for ExtendedInterrupt {
@@ -260,4 +264,6 @@ interrupt_aliases! {
     (BTIMR10, Btimr10, 86, "Basic timer 10."),
     (BTIMR11, Btimr11, 87, "Basic timer 11."),
     (DMA2D, Dma2d, 88, "2D DMA engine."),
+    (DCMI, Dcmi, 89, "Digital camera interface."),
+    (QEI, Qei, 90, "Quadrature encoder interface."),
 }

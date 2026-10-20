@@ -157,9 +157,12 @@ async fn main(spawner: Spawner) {
     {
         let s = unsafe { &*hal::pac::SPI1::PTR };
         rprintln!(
-            "spi_dual: SPI1 after transfer: IF={:#x} IE={:#x}",
+            "spi_dual: SPI1 after transfer: IF={:#x} IE={:#x} ctrl mstr={} en={} ssn_h={}",
             s.if_.read().bits(),
-            s.ie.read().bits()
+            s.ie.read().bits(),
+            s.ctrl.read().mstr().bit(),
+            s.ctrl.read().en().bit(),
+            s.ctrl.read().ssn_h().bit(),
         );
     }
 

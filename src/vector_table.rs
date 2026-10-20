@@ -4,7 +4,7 @@
 //!
 //! `cortex-m-rt` expects the device crate to expose `__INTERRUPTS` in the
 //! `.vector_table.interrupts` section and expects `device.x` to carry a weak
-//! alias per entry. The `swm341-pac` SVD only knows 29 of the 89 vectors this
+//! alias per entry. The `swm341-pac` SVD only knows 29 of the 91 vectors this
 //! chip implements, so this crate supplies both artifacts itself and leaves the
 //! PAC's `rt` feature off to avoid a second, conflicting `__INTERRUPTS`.
 //!
@@ -110,12 +110,14 @@ unsafe extern "C" {
     fn BTIMR10();
     fn BTIMR11();
     fn DMA2D();
+    fn DCMI();
+    fn QEI();
 }
 
 #[link_section = ".vector_table.interrupts"]
 #[no_mangle]
 #[used]
-pub static __INTERRUPTS: [Vector; 89] = [
+pub static __INTERRUPTS: [Vector; 91] = [
     Vector { handler: UART0 },
     Vector { handler: UART1 },
     Vector { handler: TIMR0 },
@@ -205,4 +207,6 @@ pub static __INTERRUPTS: [Vector; 89] = [
     Vector { handler: BTIMR10 },
     Vector { handler: BTIMR11 },
     Vector { handler: DMA2D },
+    Vector { handler: DCMI },
+    Vector { handler: QEI },
 ];

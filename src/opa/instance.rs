@@ -4,8 +4,8 @@
 //! their own and no NVIC vector. Their only control is the four
 //! `OPA0ON..OPA3ON` bits in the shared [`SYS`](crate::pac::SYS) register block
 //! (`SYS.OPACR`), one bit slice per unit at bit `n`. The amplifier pads are
-//! dedicated analog pads — no `PORTx.FUNC` muxing is involved — and the analog
-//! control block is always clocked, so neither pin routing nor a real clock
+//! muxed through the normal `PORTx_SEL` registers (see [`crate::opa::pins`]),
+//! but the analog control block itself is always clocked, so no real clock
 //! gate is required.
 
 use crate::clock::PeripheralClockIndex;

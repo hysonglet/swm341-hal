@@ -124,7 +124,13 @@ name = "hello_rtt"
 name = "wdt_block"
 
 [[example]]
+name = "qei_block"
+
+[[example]]
 name = "sfc_flash_id"
+
+[[example]]
+name = "flash_block"
 
 [profile.release]
 codegen-units = 1

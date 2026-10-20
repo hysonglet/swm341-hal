@@ -21,7 +21,7 @@
 //! # Interrupt vectors
 //!
 //! The SVD behind [`pac`] only describes NVIC vectors 0..=28 while the chip has
-//! 89, so this crate ships its own vector table. See [`vector_table`] and
+//! 91, so this crate ships its own vector table. See [`vector_table`] and
 //! [`interrupt`].
 
 pub use embassy_hal_internal::{Peripheral, PeripheralRef};
@@ -45,6 +45,7 @@ pub mod interrupt;
 pub mod mcu;
 pub mod mode;
 pub mod pwm;
+pub mod qei;
 pub mod rtc;
 pub mod spi;
 pub mod timr;
@@ -53,12 +54,17 @@ pub mod uart;
 // Newly added peripheral drivers, following the `uart`/`timr` five-file layout.
 pub mod btimr;
 pub mod cmp;
+// Hardware CRC engine: no interrupt line, so no async flavour.
+pub mod crc;
 pub mod div;
 pub mod dma2d;
 pub mod jpeg;
 pub mod lcdc;
 pub mod opa;
+// SDRAM controller. Like `dac` it has no NVIC vector, so its driver stops at
+// the clock gate and the register block instead of using `InstanceBase`.
 pub mod sdio;
+pub mod sdramc;
 pub mod sfc;
 pub mod wdt;
 
@@ -93,6 +99,8 @@ pub use mcu::devices::{
     Cmp1,
     Cmp2,
     Cordic,
+    // Hardware CRC engine.
+    Crc,
     Dac,
     Div,
     Dma,
@@ -112,8 +120,12 @@ pub use mcu::devices::{
     Pwm2,
     Pwm3,
     Pwm4,
+    // Quadrature encoder interface.
+    Qei,
     Rtc,
     Sdio,
+    // SDRAM controller (no NVIC vector, like `Dac`).
+    Sdramc,
     // Serial Flash Controller (dedicated SPI-NOR master, pads D3..D8).
     Sfc,
     Timr0,
@@ -222,6 +234,10 @@ impl Peripherals {
     pub fn cordic(&self) -> Cordic {
         unsafe { Cordic::steal() }
     }
+    /// Take the CRC (hardware CRC engine) singleton.
+    pub fn crc(&self) -> Crc {
+        unsafe { Crc::steal() }
+    }
     /// Take the DMA singleton.
     pub fn dma(&self) -> Dma {
         unsafe { Dma::steal() }
@@ -302,9 +318,17 @@ impl Peripherals {
     pub fn lcd(&self) -> Lcd {
         unsafe { Lcd::steal() }
     }
+    /// Take the SDRAM controller singleton.
+    pub fn sdramc(&self) -> Sdramc {
+        unsafe { Sdramc::steal() }
+    }
     /// Take the DAC singleton.
     pub fn dac(&self) -> Dac {
         unsafe { Dac::steal() }
+    }
+    /// Take the QEI (quadrature encoder interface) singleton.
+    pub fn qei(&self) -> Qei {
+        unsafe { Qei::steal() }
     }
     /// Take the DWT (Data Watchpoint and Trace) core component singleton.
     pub fn dwt(&self) -> Dwt {

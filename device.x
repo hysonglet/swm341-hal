@@ -97,3 +97,5 @@ PROVIDE(BTIMR9 = DefaultHandler);
 PROVIDE(BTIMR10 = DefaultHandler);
 PROVIDE(BTIMR11 = DefaultHandler);
 PROVIDE(DMA2D = DefaultHandler);
+PROVIDE(DCMI = DefaultHandler);
+PROVIDE(QEI = DefaultHandler);

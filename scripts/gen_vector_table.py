@@ -2,11 +2,11 @@
 """Generate the vector table pieces that the PAC cannot provide.
 
 `swm341-pac` is generated from an SVD that stops at IRQ 28, yet the silicon has
-89 vectors. Because the PAC already defines `__INTERRUPTS` (a `[Vector; 29]`
+91 vectors. Because the PAC already defines `__INTERRUPTS` (a `[Vector; 29]`
 array) behind its `rt` feature, this HAL neither enables that feature nor uses
 the PAC's `device.x`; instead it ships its own pair:
 
-* `device.x` -- `PROVIDE(<name> = DefaultHandler)` for all 89 vectors, which is
+* `device.x` -- `PROVIDE(<name> = DefaultHandler)` for all 91 vectors, which is
   what turns a Rust `#[interrupt] fn <name>()` into a real vector entry;
 * `src/vector_table.rs` -- the `__INTERRUPTS` array itself, which must otherwise
   come from the device crate.
@@ -28,7 +28,7 @@ GPIOA0 GPIOA1 GPIOA5 GPIOA6 GPIOA10 GPIOA11 GPIOA12 GPIOA13 GPIOB0 GPIOB1 GPIOB2
 GPIOC0 GPIOC1 GPIOC2 GPIOC3 GPIOC4 GPIOD3 GPIOD4 GPIOD5 GPIOD6 GPIOD7 GPIOD8
 GPIOC9 GPIOC10 GPIOC11 GPIOC12 GPIOM0 GPIOM1 GPIOM2 GPIOM3 GPIOM4 DIV LCD GPIOE
 JPEG SDIO USB CAN1 TIMR4 BTIMR4 BTIMR5 BTIMR6 BTIMR7 BTIMR8 BTIMR9 BTIMR10
-BTIMR11 DMA2D
+BTIMR11 DMA2D DCMI QEI
 """.split()
 
 DEVICE_X = """/* Weak aliases for every NVIC interrupt vector of the SWM341.
@@ -49,7 +49,7 @@ RUST_HEADER = """//! Device specific portion of the vector table.
 //!
 //! `cortex-m-rt` expects the device crate to expose `__INTERRUPTS` in the
 //! `.vector_table.interrupts` section and expects `device.x` to carry a weak
-//! alias per entry. The `swm341-pac` SVD only knows 29 of the 89 vectors this
+//! alias per entry. The `swm341-pac` SVD only knows 29 of the 91 vectors this
 //! chip implements, so this crate supplies both artifacts itself and leaves the
 //! PAC's `rt` feature off to avoid a second, conflicting `__INTERRUPTS`.
 //!
@@ -80,8 +80,8 @@ ENTRIES
 
 
 def main():
-    assert len(VECTORS) == 89, len(VECTORS)
-    assert len(set(VECTORS)) == 89, "duplicate vector name"
+    assert len(VECTORS) == 91, len(VECTORS)
+    assert len(set(VECTORS)) == 91, "duplicate vector name"
 
     (ROOT / "device.x").write_text(
         DEVICE_X + "\n".join(f"PROVIDE({name} = DefaultHandler);" for name in VECTORS) + "\n"
