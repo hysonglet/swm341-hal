@@ -9,7 +9,7 @@
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
 //! use hal::can::{Can, Frame};
-//! let mut can = Can::new(p.CAN0, Default::default());
+//! let mut can = Can::new(p.can0(), Default::default());
 //! can.transmit(&Frame::new_data(0x123, false, &[1, 2, 3])).unwrap();
 //! if let Some(frame) = can.receive() { /* ... */ }
 //! ```

@@ -44,24 +44,41 @@ pub mod serial {
 pub mod devices {
     embassy_hal_internal::peripherals_definition!(
         Timr0, Timr1, Timr2, Timr3, Timr4, Pwm0, Pwm1, Pwm2, Pwm3, Pwm4, Adc0, Adc1, Rtc, Cordic,
-        Dma, Hall, // Hardware divider / square-root unit.
-        Div, // Watchdog timer.
-        Wdt, // Basic timers (12 instances, sharing one clock gate).
+        // Direct memory access controller.
+        Dma,
+        // HALL (hall-sensor interface; registers live in `TIMRG`, driven by
+        // `crate::timr::hall`).
+        Hall,
+        // Hardware divider / square-root unit.
+        Div,
+        // Watchdog timer.
+        Wdt,
+        // Basic timers (12 instances, sharing one clock gate).
         Btimr0, Btimr1, Btimr2, Btimr3, Btimr4, Btimr5, Btimr6, Btimr7, Btimr8, Btimr9, Btimr10,
-        Btimr11, // SDIO / SD-memory host controller.
-        Sdio, // 2D DMA / graphics accelerator.
-        Dma2d, // JPEG decoder.
-        Jpeg, // TFT LCD controller.
-        Lcd, // SDRAM controller (the only SWM341 peripheral with no NVIC vector).
-        Sdramc, // 12-bit digital-to-analog converter.
-        Dac, // Quadrature encoder interface (QEA/QEB/INDEX on PD4/PD3/PD2).
-        Qei, // Analog comparators (CMP0/CMP1/CMP2, sharing the `ACMP` interrupt).
+        Btimr11,
+        // SDIO / SD-memory host controller.
+        Sdio,
+        // 2D DMA / graphics accelerator.
+        Dma2d,
+        // JPEG decoder.
+        Jpeg,
+        // TFT LCD controller.
+        Lcd,
+        // SDRAM controller (the only SWM341 peripheral with no NVIC vector).
+        Sdramc,
+        // 12-bit digital-to-analog converter.
+        Dac,
+        // Quadrature encoder interface (QEA/QEB/INDEX on PD4/PD3/PD2).
+        Qei,
+        // Analog comparators (CMP0/CMP1/CMP2, sharing the `ACMP` interrupt).
         Cmp0, Cmp1, Cmp2,
         // On-chip operational amplifiers (power control in `SYS.OPACR`).
         Opa0, Opa1, Opa2, Opa3,
         // Data Watchpoint and Trace (Armv8-M core debug component).
-        Dwt, // Serial Flash Controller (dedicated SPI-NOR master, pads D3..D8).
-        Sfc, // Hardware CRC engine.
+        Dwt,
+        // Serial Flash Controller (dedicated SPI-NOR master, pads D3..D8).
+        Sfc,
+        // Hardware CRC engine.
         Crc,
     );
 

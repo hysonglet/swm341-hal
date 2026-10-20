@@ -12,7 +12,7 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let mut adc = hal::adc::Adc::new(p.ADC0, hal::adc::Config::default());
+//! let mut adc = hal::adc::Adc::new(p.adc0(), hal::adc::Config::default());
 //! let pc6 = adc.set_pin(p.PC6);              // PC6 -> ADC0 channel 0
 //! let millivolts = adc.read_input(&pc6) as u32 * 3300 / 4095;
 //! ```

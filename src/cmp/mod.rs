@@ -19,7 +19,7 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let mut cmp = hal::cmp::Cmp::new(p.CMP0, hal::cmp::Config::default());
+//! let mut cmp = hal::cmp::Cmp::new(p.cmp0(), hal::cmp::Config::default());
 //! // PA2 is ACMP0's positive input, PB12 its negative input. Bind the handles:
 //! // dropping them would release the pads again.
 //! let _pos = cmp.set_positive_pin(p.PA2);

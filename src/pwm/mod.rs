@@ -14,7 +14,7 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let mut pwm = hal::pwm::Pwm::new(p.PWM0, hal::pwm::Config::default());
+//! let mut pwm = hal::pwm::Pwm::new(p.pwm0(), hal::pwm::Config::default());
 //! pwm.set_duty_a(250);          // 25% duty on the A output
 //! pwm.start();
 //! ```

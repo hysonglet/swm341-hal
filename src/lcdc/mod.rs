@@ -9,7 +9,7 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let lcd = hal::lcdc::Lcd::new(p.LCD);
+//! let lcd = hal::lcdc::Lcd::new(p.lcd());
 //! lcd.configure(&hal::lcdc::Config::default());
 //! // Place a layer over the whole panel and point it at a framebuffer.
 //! let layer = hal::lcdc::LayerConfig {

@@ -120,7 +120,7 @@ impl Config {
     /// # let p = hal::init(Default::default());
     /// // One second at the 120 MHz PCLK; the prescaler is derived from the interval.
     /// let (cfg, load) = hal::timr::Config::from_micros(120_000_000, 1_000_000);
-    /// let mut timer = hal::timr::Timr::new(p.TIMR0, cfg);
+    /// let mut timer = hal::timr::Timr::new(p.timr0(), cfg);
     /// timer.clear_overflow();
     /// timer.start(load);
     /// while !timer.overflow_flag() {}

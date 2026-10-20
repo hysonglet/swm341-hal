@@ -10,7 +10,7 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let jpeg = hal::jpeg::Jpeg::new(p.JPEG);
+//! let jpeg = hal::jpeg::Jpeg::new(p.jpeg());
 //! let (mut y, mut u, mut v) = ([0u8; 0], [0u8; 0], [0u8; 0]);
 //! // Provide a real bitstream, tables and buffers in practice.
 //! let cfg = hal::jpeg::DecodeConfig {

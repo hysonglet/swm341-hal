@@ -13,7 +13,7 @@
 //! # let p = hal::init(Default::default());
 //! use hal::spi::pins;
 //! let mut spi = hal::spi::Spi::new(
-//!     p.SPI0,
+//!     p.spi0(),
 //!     p.PB8,  pins::b::Pin8Func::Spi0Sclk,
 //!     p.PB10, pins::b::Pin10Func::Spi0Mosi,
 //!     p.PB9,  pins::b::Pin9Func::Spi0Miso,

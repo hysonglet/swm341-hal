@@ -13,7 +13,7 @@
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
 //! let mut wdt = hal::wdt::Wdt::new(
-//!     p.WDT,
+//!     p.wdt(),
 //!     hal::wdt::Config::default().reload(0xFFFF).warning(0x8000),
 //! );
 //! // ... periodically:

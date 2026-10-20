@@ -11,7 +11,7 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let dma2d = hal::dma2d::Dma2d::new(p.DMA2D);
+//! let dma2d = hal::dma2d::Dma2d::new(p.dma2d());
 //! let mut dst = [0u32; 64 * 64];
 //! let src = [0x1122_3344u32; 64 * 64];
 //! // Fill `dst` with a constant ARGB8888 colour.

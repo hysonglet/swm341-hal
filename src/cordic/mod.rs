@@ -9,7 +9,7 @@
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
 //! use hal::cordic::{Cordic, Q14};
-//! let mut cordic = Cordic::new(p.CORDIC, Default::default());
+//! let mut cordic = Cordic::new(p.cordic(), Default::default());
 //! let sin_90 = cordic.sin(Q14::ONE); // sin(pi/2)
 //! ```
 //!

@@ -17,7 +17,7 @@
 //! # let p = hal::init(Default::default());
 //! use hal::i2c::pins;
 //! let mut i2c = hal::i2c::I2c::new(
-//!     p.I2C0,
+//!     p.i2c0(),
 //!     p.PC2,  pins::c::Pin2Func::I2c0Scl,
 //!     p.PC1,  pins::c::Pin1Func::I2c0Sda,
 //!     hal::i2c::Config::default(),

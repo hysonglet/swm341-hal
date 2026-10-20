@@ -10,7 +10,7 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let mut timer = hal::btimr::Btimr::new(p.BTIMR0, hal::btimr::Config::default());
+//! let mut timer = hal::btimr::Btimr::new(p.btimr0(), hal::btimr::Config::default());
 //! timer.start(1_000_000);          // count down from 1,000,000
 //! while timer.value() > 0 {}       // busy wait for the underflow
 //! ```

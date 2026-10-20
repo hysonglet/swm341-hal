@@ -9,7 +9,7 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let mut dma = hal::dma::Dma::new(p.DMA, Default::default());
+//! let mut dma = hal::dma::Dma::new(p.dma(), Default::default());
 //! let src = [0xABu8; 16];
 //! let mut dst = [0u8; 16];
 //! dma.memcopy(0, &src, &mut dst).unwrap();

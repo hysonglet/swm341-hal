@@ -9,7 +9,7 @@
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
 //! use hal::rtc::{Rtc, Datetime};
-//! let mut rtc = Rtc::new(p.RTC, Default::default());
+//! let mut rtc = Rtc::new(p.rtc(), Default::default());
 //! rtc.set_time(Datetime { year: 2024, month: 1, date: 1, weekday: 1, hour: 12, min: 0, sec: 0 });
 //! let now = rtc.get_time();
 //! ```

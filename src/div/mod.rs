@@ -10,7 +10,7 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! let div = hal::div::Div::new(p.DIV);
+//! let div = hal::div::Div::new(p.div());
 //! let result = div.divide(1_000_000, 7);
 //! assert_eq!(result.quotient, 142_857);
 //! assert_eq!(result.remainder, 1);
