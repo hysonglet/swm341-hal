@@ -5,7 +5,7 @@
 //!
 //! CMP0's positive input is PA2 (`ACMP0_INP`) and its negative input is PB12
 //! (`ACMP0_INN`); both are routed through the type-checked
-//! [`swm341_hal::cmp::Cmp::add_positive_pin`] / `add_negative_pin` API. The
+//! [`swm341_hal::cmp::Cmp::set_positive_pin`] / `set_negative_pin` API. The
 //! output toggles as the positive input crosses the negative input threshold.
 
 use panic_halt as _;
@@ -35,8 +35,8 @@ fn main() -> ! {
 
     // PA2 -> ACMP0 positive input, PB12 -> ACMP0 negative input. The handles
     // keep both pads routed for as long as they are alive.
-    let _pos = cmp.add_positive_pin(p.PA2);
-    let _neg = cmp.add_negative_pin(p.PB12);
+    let _pos = cmp.set_positive_pin(p.PA2);
+    let _neg = cmp.set_negative_pin(p.PB12);
 
     let mut prev = cmp.output();
     rprintln!("cmp_block: initial CMP0 output = {}", prev as u8);

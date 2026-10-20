@@ -4,7 +4,7 @@
 //! `SWM341_port.h` -- do not edit by hand.
 //!
 //! The DAC has a single output pad, `PD2` (`DAC_OUT`, function code `15`). The
-//! variant is the type-checked argument to [`crate::dac::Dac::add_pin`] via the
+//! variant is the type-checked argument to [`crate::dac::Dac::set_pin`] via the
 //! `DacPin` trait; it is also usable with [`crate::gpio::set_function`].
 
 

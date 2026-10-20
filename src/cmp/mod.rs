@@ -12,17 +12,18 @@
 //! Each comparator's inputs are fixed pads -- there is no mux between the
 //! comparator and its pad, only the shared analog path (function code `15`).
 //! The type-checked pad roles (`ACMPx_INP` / `ACMPx_INN`) live in
-//! [`crate::cmp::pins`], and the high-level [`Cmp::add_positive_pin`] /
-//! [`Cmp::add_negative_pin`] route a pad for you, so you typically don't touch
+//! [`crate::cmp::pins`], and the high-level [`Cmp::set_positive_pin`] /
+//! [`Cmp::set_negative_pin`] route a pad for you, so you typically don't touch
 //! [`crate::gpio::set_function`] directly.
 //!
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
 //! let mut cmp = hal::cmp::Cmp::new(p.CMP0, hal::cmp::Config::default());
-//! // PA2 is ACMP0's positive input, PB12 its negative input.
-//! cmp.add_positive_pin(p.PA2);
-//! cmp.add_negative_pin(p.PB12);
+//! // PA2 is ACMP0's positive input, PB12 its negative input. Bind the handles:
+//! // dropping them would release the pads again.
+//! let _pos = cmp.set_positive_pin(p.PA2);
+//! let _neg = cmp.set_negative_pin(p.PB12);
 //! let high = cmp.output();
 //! ```
 
@@ -92,7 +93,7 @@ cmp_negative_pins! {
 
 /// An analog pad that has been routed to one of a comparator's inputs.
 ///
-/// Returned by [`Cmp::add_positive_pin`] / [`Cmp::add_negative_pin`]; it owns
+/// Returned by [`Cmp::set_positive_pin`] / [`Cmp::set_negative_pin`]; it owns
 /// the pad so its `PORTx.FUNC` routing stays in effect for as long as the
 /// handle lives.
 pub struct CmpInput<'d, P: crate::gpio::Pin> {
@@ -131,7 +132,7 @@ impl<'d, T: Instance, M: Mode> Cmp<'d, T, M> {
     /// This replaces the manual `Flex::new(pin).set_func(..)` dance: the pad a
     /// comparator can use is known from its type, so the driver programs
     /// `PORTx.FUNC` (code `15`, the analog path) for you.
-    pub fn add_positive_pin<P: CmpPositivePin<T>>(
+    pub fn set_positive_pin<P: CmpPositivePin<T>>(
         &mut self,
         pin: impl Peripheral<P = P> + 'd,
     ) -> CmpInput<'d, P> {
@@ -146,7 +147,7 @@ impl<'d, T: Instance, M: Mode> Cmp<'d, T, M> {
     ///
     /// Also switches the comparator's negative source to the external pad (it
     /// would otherwise keep comparing against the internal reference).
-    pub fn add_negative_pin<P: CmpNegativePin<T>>(
+    pub fn set_negative_pin<P: CmpNegativePin<T>>(
         &mut self,
         pin: impl Peripheral<P = P> + 'd,
     ) -> CmpInput<'d, P> {

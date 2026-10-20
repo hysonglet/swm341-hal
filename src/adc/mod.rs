@@ -5,7 +5,7 @@
 //! the end-of-conversion interrupt; otherwise [`Adc::read`] busy-waits.
 //!
 //! The type-checked analog pad roles (`ADCx_CHy`, plus the `ADCx_TRIGz` hardware
-//! triggers) live in [`crate::adc::pins`]. The high-level [`Adc::add_pin`] routes
+//! triggers) live in [`crate::adc::pins`]. The high-level [`Adc::set_pin`] routes
 //! a pin to the analog mux (function code `15`) and remembers its channel, so you
 //! typically don't touch [`crate::gpio::set_function`] directly.
 //!
@@ -13,7 +13,7 @@
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
 //! let mut adc = hal::adc::Adc::new(p.ADC0, hal::adc::Config::default());
-//! let pc6 = adc.add_pin(p.PC6);              // PC6 -> ADC0 channel 0
+//! let pc6 = adc.set_pin(p.PC6);              // PC6 -> ADC0 channel 0
 //! let millivolts = adc.read_input(&pc6) as u32 * 3300 / 4095;
 //! ```
 
@@ -37,7 +37,7 @@ pub use types::*;
 /// associated [`CHANNEL`](AdcPin::CHANNEL) is the converter channel the pad
 /// becomes once routed through the analog mux, and [`FUNC`](AdcPin::FUNC) is the
 /// 4-bit `PORTx.FUNC` code (`15`) that selects the analog path. This lets the
-/// driver configure a pin's channel from its type alone -- see [`Adc::add_pin`].
+/// driver configure a pin's channel from its type alone -- see [`Adc::set_pin`].
 pub trait AdcPin<T: Instance>: crate::gpio::Pin {
     /// Converter channel this pad feeds (`0`..`11`).
     const CHANNEL: u8;
@@ -82,7 +82,7 @@ use core::marker::PhantomData;
 
 /// An ADC input pad that has been routed to the analog mux.
 ///
-/// Returned by [`Adc::add_pin`]; it owns the pad so its `PORTx.FUNC` routing
+/// Returned by [`Adc::set_pin`]; it owns the pad so its `PORTx.FUNC` routing
 /// stays in effect for as long as the handle lives, and it records the channel
 /// the pad maps to (via [`channel`](AdcInput::channel)) for later reads.
 pub struct AdcInput<'d, T: Instance, P: AdcPin<T>> {
@@ -156,7 +156,7 @@ impl<'d, T: Instance, M: Mode> Adc<'d, T, M> {
     /// This replaces the manual `Flex::new(pin).set_func(Adc0ChN)` dance: the
     /// channel a pad maps to is known from its type, so the driver both programs
     /// `PORTx.FUNC` (code `15`) and records the channel for later reads.
-    pub fn add_pin<P: AdcPin<T>>(&mut self, pin: impl Peripheral<P = P> + 'd) -> AdcInput<'d, T, P> {
+    pub fn set_pin<P: AdcPin<T>>(&mut self, pin: impl Peripheral<P = P> + 'd) -> AdcInput<'d, T, P> {
         let flex = crate::gpio::Flex::new(pin);
         // Float the pad: a leftover pull resistor biases the sample. The vendor
         // samples do the same (`PORT_Init(..., 0)` -- last arg = pull off).

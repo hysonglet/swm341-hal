@@ -3,7 +3,7 @@
 
 //! Blocking DAC sample: drive `PD2` with a triangle ramp and print the code.
 //!
-//! The DAC output pad is `PD2`; [`swm341_hal::dac::Dac::add_pin`] routes it to
+//! The DAC output pad is `PD2`; [`swm341_hal::dac::Dac::set_pin`] routes it to
 //! `DAC_OUT` (function code `15`) so the converted voltage leaves the chip.
 
 use panic_halt as _;
@@ -23,7 +23,8 @@ fn main() -> ! {
     rprintln!("dac_block: started, driving PD2 (DAC_OUT)");
 
     let mut dac = hal::dac::Dac::new(p.dac(), hal::dac::Config::default());
-    dac.add_pin(p.PD2);
+    // Keep the handle: it holds PD2 routed to the analog output path.
+    let _out = dac.set_pin(p.PD2);
 
     // Triangle ramp over the 12-bit range; with the 3.3 V full scale each step
     // is ~200 mV.

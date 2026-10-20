@@ -36,9 +36,10 @@ fn main() -> ! {
     let opa3 = Opa::new(p.opa3(), hal::opa::Config { enable: true });
 
     // OPA0 as an external voltage follower: route all three pads before use.
-    opa0.add_positive_pin(p.PC8);
-    opa0.add_negative_pin(p.PC5);
-    opa0.add_output_pin(p.PC9);
+    // The handles keep the pads routed; dropping them would release the pads.
+    let _p = opa0.set_positive_pin(p.PC8);
+    let _n = opa0.set_negative_pin(p.PC5);
+    let _o = opa0.set_output_pin(p.PC9);
     assert!(opa0.is_enabled());
 
     // The other three units are powered too (their pads stay digital unless

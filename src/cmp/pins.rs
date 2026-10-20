@@ -8,8 +8,8 @@
 //! into `PORTx.FUNC0/FUNC1` (always `15`, the analog path). `ACMPx_INP` is the
 //! positive (non-inverting) input of comparator `x`, `ACMPx_INN` its negative
 //! (inverting) input. Code `0` (generic GPIO) is omitted. The variants are the
-//! type-checked arguments to [`crate::cmp::Cmp::add_positive_pin`] /
-//! [`crate::cmp::Cmp::add_negative_pin`].
+//! type-checked arguments to [`crate::cmp::Cmp::set_positive_pin`] /
+//! [`crate::cmp::Cmp::set_negative_pin`].
 
 
 /// Generate the per-pin `Pin{n}Func` enums for one bank module.

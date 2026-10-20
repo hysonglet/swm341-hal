@@ -26,8 +26,8 @@ async fn main(_spawner: Spawner) {
 
     // Route PC0 (ADC0_CH6) and PC1 (ADC0_CH5) to the analog mux and remember
     // the converter channel each one maps to.
-    let pc0 = adc.add_pin(p.PC0);
-    let pc1 = adc.add_pin(p.PC1);
+    let pc0 = adc.set_pin(p.PC0);
+    let pc1 = adc.set_pin(p.PC1);
     rprintln!(
         "ADC ready: PC0 -> CH{}, PC1 -> CH{}",
         pc0.channel,

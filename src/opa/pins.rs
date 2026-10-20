@@ -20,9 +20,9 @@
 //! The traits are generic over the amplifier [`Instance`] so the compiler
 //! rejects wiring, say, OPA0's pad to an [`Opa`](crate::opa::Opa) handle for
 //! OPA1 -- each pad is only implemented for the unit it is physically wired
-//! to. Apply them through [`Opa::add_positive_pin`](crate::opa::Opa::add_positive_pin)
-//! / [`add_negative_pin`](crate::opa::Opa::add_negative_pin) /
-//! [`add_output_pin`](crate::opa::Opa::add_output_pin).
+//! to. Apply them through [`Opa::set_positive_pin`](crate::opa::Opa::set_positive_pin)
+//! / [`set_negative_pin`](crate::opa::Opa::set_negative_pin) /
+//! [`set_output_pin`](crate::opa::Opa::set_output_pin).
 
 use crate::gpio::Pin;
 

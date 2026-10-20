@@ -2,7 +2,7 @@
 //!
 //! The SWM341 has a single 12-bit DAC whose output pad is `PD2`. The pad is
 //! routed to the converter through `PORTx.FUNC` code `15` (see
-//! [`crate::dac::pins`] / [`Dac::add_pin`]); without that routing the converted
+//! [`crate::dac::pins`] / [`Dac::set_pin`]); without that routing the converted
 //! voltage never leaves the chip. Writing a value to the data-hold register
 //! (`DHR`) and letting the converter load it into the output register (`DOR`)
 //! produces the analog level -- [`Dac::write`] does both and waits for the load
@@ -12,7 +12,8 @@
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
 //! let mut dac = hal::dac::Dac::new(p.dac(), hal::dac::Config::default());
-//! dac.add_pin(p.PD2);                  // route PD2 to DAC_OUT (func 15)
+//! // Bind the handle: dropping it would release the pad again.
+//! let _out = dac.set_pin(p.PD2);        // route PD2 to DAC_OUT (func 15)
 //! dac.write(2048);                     // ~1.65 V with the 3.3 V full scale
 //! ```
 
@@ -30,7 +31,7 @@ pub use types::*;
 /// A GPIO pad that can carry the DAC output.
 ///
 /// Implemented for `PD2`, the only pad exposing the `DAC_OUT` function (code
-/// `15`). Routing it (via [`Dac::add_pin`]) is what makes the converted voltage
+/// `15`). Routing it (via [`Dac::set_pin`]) is what makes the converted voltage
 /// appear off-chip.
 pub trait DacPin: crate::gpio::Pin {
     /// `PORTx.FUNC` code selecting the DAC output path (`15`).
@@ -39,6 +40,16 @@ pub trait DacPin: crate::gpio::Pin {
 
 impl DacPin for crate::gpio::PD2 {
     const FUNC: u8 = 15;
+}
+
+/// The DAC output pad, already routed to the converter.
+///
+/// Returned by [`Dac::set_pin`]; it owns the pad so its `PORTx.FUNC` routing and
+/// the port clock stay in effect for as long as the handle lives. Dropping it
+/// releases the pad (and closes the port clock when no other pad of that bank is
+/// in use), which leaves the mux configured but marks the pad free again.
+pub struct DacOutput<'d, P: crate::gpio::Pin> {
+    _flex: crate::gpio::Flex<'d, P>,
 }
 
 /// A DAC driven by its peripheral clock.
@@ -54,7 +65,7 @@ impl<'d> Dac<'d> {
     /// Enables the peripheral clock, applies the factory reference-voltage trim
     /// (`SYS.DACCR.VRADJ` from `SYS.BACKUP[2]`, exactly like the vendor driver),
     /// programs the data format, and powers on the output driver. The output pad
-    /// still has to be routed with [`add_pin`](Self::add_pin).
+    /// still has to be routed with [`set_pin`](Self::set_pin).
     pub fn new(peri: impl Peripheral<P = crate::Dac> + 'd, config: Config) -> Self {
         into_ref!(peri);
 
@@ -80,9 +91,10 @@ impl<'d> Dac<'d> {
     ///
     /// `PD2` is the only pad with a `DAC_OUT` function, so this both turns the
     /// port clock on and writes `PORTx.FUNC = 15`.
-    pub fn add_pin<P: DacPin>(&mut self, pin: impl Peripheral<P = P> + 'd) {
-        let _flex = crate::gpio::Flex::new(pin);
+    pub fn set_pin<P: DacPin>(&mut self, pin: impl Peripheral<P = P> + 'd) -> DacOutput<'d, P> {
+        let flex = crate::gpio::Flex::new(pin);
         crate::gpio::set_function::<P>(P::FUNC);
+        DacOutput { _flex: flex }
     }
 
     /// Write `value` to the converter and wait for it to load.

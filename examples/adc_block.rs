@@ -4,7 +4,7 @@
 //! Blocking ADC sample: convert channel 0 and print the 12-bit result over RTT.
 //!
 //! `ADC0` channel 0 is wired to `PC6`. The pin is configured through the typed
-//! [`swm341_hal::adc::Adc::add_pin`] API, which routes the pad to the analog mux
+//! [`swm341_hal::adc::Adc::set_pin`] API, which routes the pad to the analog mux
 //! (function code `15`) and remembers the channel it maps to.
 
 use panic_halt as _;
@@ -25,10 +25,10 @@ fn main() -> ! {
 
     let mut adc = hal::adc::Adc::new(p.adc0(), hal::adc::Config::default());
 
-    // Route PC0 to the analog mux; `add_pin` records that PC0 is ADC0 channel 0.
-    let pc0 = adc.add_pin(p.PC0);
-    // Route PC1 to the analog mux; `add_pin` records that PC1 is ADC0 channel 1.
-    let pc1 = adc.add_pin(p.PC1);
+    // Route PC0 to the analog mux; `set_pin` records that PC0 is ADC0 channel 0.
+    let pc0 = adc.set_pin(p.PC0);
+    // Route PC1 to the analog mux; `set_pin` records that PC1 is ADC0 channel 1.
+    let pc1 = adc.set_pin(p.PC1);
 
     loop {
         rprintln!("start");
