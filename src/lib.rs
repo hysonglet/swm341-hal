@@ -38,7 +38,7 @@ pub mod dma;
 pub mod embassy;
 pub mod flash;
 pub mod gpio;
-pub mod hall;
+
 pub mod i2c;
 pub mod instance_base;
 pub mod interrupt;

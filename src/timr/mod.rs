@@ -23,12 +23,20 @@
 //! [`crate::gpio::set_function`] after [`crate::gpio::acquire`] when a pad is
 //! actually used.
 //!
+//! ## Hall interface
+//!
+//! TIMR0 and TIMR3 double as the time base for the two hall-sensor interfaces
+//! (`HALL0` and `HALL3`): on every input edge the hardware latches
+//! `(load - current)` of its paired timer into `TIMRG.HALL0V` / `HALL3V`. That
+//! driver lives in [`hall`] because of this coupling -- it takes the paired
+//! [`Timr`] and arms it as a free-running counter.
+//!
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
 //! // One second at the 120 MHz PCLK; the prescaler is derived from the interval.
 //! let (cfg, load) = hal::timr::Config::from_micros(120_000_000, 1_000_000);
-//! let mut timer = hal::timr::Timr::new(p.TIMR0, cfg);
+//! let mut timer = hal::timr::Timr::new(p.timr0(), cfg);
 //! timer.clear_overflow();
 //! timer.start(load);
 //! while !timer.overflow_flag() {}  // wait for the underflow
@@ -45,6 +53,7 @@ use crate::mode::Async;
 
 #[cfg(feature = "embassy")]
 mod future;
+pub mod hall;
 mod instance;
 pub mod pins;
 mod types;
