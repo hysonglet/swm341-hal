@@ -180,6 +180,7 @@ impl<'d, T: Instance> Lcd<'d, T, Blocking> {
             config.invert_hsync,
             config.serial,
             config.mpu_enable,
+            config.auto_restart,
         );
         T::set_timing(&config.h, &config.v);
         T::set_bg_color(config.bg_color);

@@ -25,7 +25,10 @@ pub enum PixelFormat {
 /// Configuration of the LCD controller.
 #[derive(Clone, Copy, Debug)]
 pub struct Config {
-    /// Dot-clock divisor (`CR.CLKDIV`, 0..=63). Output clock = HCLK / (CLKDIV + 1).
+    /// Dot-clock divisor register value (`CR.CLKDIV`, 0..=63).
+    ///
+    /// The SWM341 divides `HCLK` by `clock_div + 2`, so `0` gives `/2`, `1` gives
+    /// `/3`, and so on. For a 150 MHz `HCLK`, `3` yields 30 MHz DOTCLK.
     pub clock_div: u8,
     /// Pixel format.
     pub format: PixelFormat,
@@ -39,6 +42,14 @@ pub struct Config {
     pub serial: bool,
     /// Enable the external memory (MPU) bus interface (`CR.MPUEN`).
     pub mpu_enable: bool,
+    /// Auto-restart the scan-out after every completed frame (`CR.AUTORESTA`).
+    ///
+    /// This mirrors the vendor `LCD_Init` `IntEOTEn == 0` behaviour: with it on
+    /// the controller keeps refreshing the panel on its own, which is what a
+    /// plain `start_frame()` bring-up wants. Turn it off when you drive the
+    /// panel from an end-of-frame interrupt and re-trigger `start_frame()`
+    /// yourself (the async `wait_frame` path expects this).
+    pub auto_restart: bool,
     /// Horizontal timing.
     pub h: HvTiming,
     /// Vertical timing.
@@ -57,6 +68,7 @@ impl Default for Config {
             invert_hsync: false,
             serial: false,
             mpu_enable: false,
+            auto_restart: true,
             h: HvTiming {
                 sync: 1,
                 back_porch: 46,

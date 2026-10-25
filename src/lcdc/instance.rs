@@ -40,6 +40,11 @@ pub(crate) mod sealed {
         }
 
         /// Write the dot-clock divisor and signal-polarity / format control.
+        ///
+        /// Mirrors the vendor `LCD_Init`: beyond the polarity/format bits it also
+        /// turns on the AHB burst (`BURSTEN`/`BURSTLEN`, needed to pull a whole
+        /// scanline out of SDRAM) and, when `auto_restart` is set, `AUTORESTA`
+        /// so the controller keeps refreshing without an end-of-frame ISR.
         #[inline(always)]
         fn set_control(
             clkdiv: u8,
@@ -49,6 +54,7 @@ pub(crate) mod sealed {
             inv_hsync: bool,
             serial: bool,
             mpu: bool,
+            auto_restart: bool,
         ) {
             let regs = unsafe { &*Self::regs() };
             regs.cr.write(|w| unsafe {
@@ -59,11 +65,25 @@ pub(crate) mod sealed {
                 w.format().bit(format_yuv);
                 w.seren().bit(serial);
                 w.mpuen().bit(mpu);
+                w.bursten().set_bit();
+                w.burstlen().set_bit();
+                w.autoresta().bit(auto_restart);
                 w
             });
+            // `CR.CLKALW` (bit 7) keeps DOTCLK running through blanking. The PAC
+            // omits the accessor and svd2rust `write` would otherwise force the
+            // bit to 0, stopping the clock between frames -- which makes many RGB
+            // panels flicker hard. The vendor `LCD_Init` always sets it.
+            unsafe {
+                regs.cr.modify(|r, w| w.bits(r.bits() | (1 << 7)));
+            }
         }
 
         /// Write the horizontal and vertical timing.
+        ///
+        /// NOTE: the vendor `LCD_Init` writes `count - 1` into these fields, but
+        /// on this silicon the observed working values are the raw counts, so we
+        /// write them verbatim (the PAC field already maps to the active count).
         #[inline(always)]
         fn set_timing(h: &crate::lcdc::types::HvTiming, v: &crate::lcdc::types::HvTiming) {
             let regs = unsafe { &*Self::regs() };
@@ -105,7 +125,9 @@ pub(crate) mod sealed {
                 w
             });
             l.addr.write(|w| unsafe { w.bits(cfg.framebuffer) });
-            l.llen.write(|w| unsafe { w.bits(cfg.stride_bytes) });
+            // `LLEN` is the scanline length in half-words, so the vendor writes
+            // `HnPixel - 1`; equivalently `stride_bytes / 2 - 1` for RGB565.
+            l.llen.write(|w| unsafe { w.bits(cfg.stride_bytes / 2 - 1) });
             l.lcr.modify(|_, w| unsafe {
                 w.alpha().bits(cfg.alpha);
                 w.en().bit(cfg.enable);
