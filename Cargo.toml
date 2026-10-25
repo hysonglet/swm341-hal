@@ -136,6 +136,9 @@ name = "flash_block"
 name = "lcdc_block"
 
 [[example]]
+name = "lcdc_gradient"
+
+[[example]]
 name = "sdramc_block"
 
 [profile.release]
