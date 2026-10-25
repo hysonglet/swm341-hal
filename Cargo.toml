@@ -132,6 +132,12 @@ name = "sfc_flash_id"
 [[example]]
 name = "flash_block"
 
+[[example]]
+name = "lcdc_block"
+
+[[example]]
+name = "sdramc_block"
+
 [profile.release]
 codegen-units = 1
 debug = 1
