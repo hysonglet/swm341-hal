@@ -10,6 +10,10 @@
 //!
 //! Every slot therefore resolves to whatever `#[interrupt] fn <name>()` exists,
 //! falling back to `DefaultHandler` thanks to those weak aliases.
+//!
+//! The declarations and the array below are compiled out for non-Arm targets:
+//! `.vector_table.interrupts` is an ELF-only section name, so a hosted build
+//! (e.g. `cargo test`) must not carry it.
 
 /// Entries of the interrupt portion of the vector table.
 ///
@@ -20,6 +24,7 @@ pub union Vector {
     pub reserved: u32,
 }
 
+#[cfg(target_arch = "arm")]
 unsafe extern "C" {
     fn UART0();
     fn UART1();
@@ -114,6 +119,7 @@ unsafe extern "C" {
     fn QEI();
 }
 
+#[cfg(target_arch = "arm")]
 #[link_section = ".vector_table.interrupts"]
 #[no_mangle]
 #[used]

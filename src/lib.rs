@@ -23,6 +23,18 @@
 //! The SVD behind [`pac`] only describes NVIC vectors 0..=28 while the chip has
 //! 91, so this crate ships its own vector table. See [`vector_table`] and
 //! [`interrupt`].
+//!
+//! # Unit tests
+//!
+//! There is no hardware on the host, so the tests cover only the parts that do
+//! not talk to one -- arithmetic and argument checks that run before any
+//! register is touched. `.cargo/config.toml` pins the default target to the
+//! microcontroller and a `no_std` target ships no `test` crate, so the host
+//! triple has to be named explicitly:
+//!
+//! ```text
+//! cargo test --target aarch64-apple-darwin --lib
+//! ```
 
 pub use embassy_hal_internal::{Peripheral, PeripheralRef};
 /// Raw register access crate backing this HAL.
@@ -76,6 +88,29 @@ pub mod dwt;
 pub mod vector_table;
 
 pub use mcu::Peripherals;
+
+/// Critical-section implementation for off-target builds.
+///
+/// [`cortex_m`]'s single-core implementation -- the one this crate relies on
+/// for real -- is compiled out as soon as `target_arch` is not `arm`, which
+/// would leave `critical_section::with` resolving to a pair of symbols nobody
+/// defines and stop the unit tests from linking. Nothing preempts anything on
+/// a host (the tests run single threaded and no peripheral is reachable), so
+/// "disabling interrupts" is a no-op here.
+#[cfg(not(target_arch = "arm"))]
+struct HostCriticalSection;
+
+#[cfg(not(target_arch = "arm"))]
+critical_section::set_impl!(HostCriticalSection);
+
+#[cfg(not(target_arch = "arm"))]
+unsafe impl critical_section::Impl for HostCriticalSection {
+    unsafe fn acquire() -> critical_section::RawRestoreState {
+        0
+    }
+
+    unsafe fn release(_restore_state: critical_section::RawRestoreState) {}
+}
 
 // Serial peripherals are generated under `mcu::serial`; re-export them at the
 // crate root so drivers can name them directly.
