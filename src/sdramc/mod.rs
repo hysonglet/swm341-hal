@@ -57,6 +57,22 @@ macro_rules! sdram_pins {
             $( pub $name: gpio::$pin, )+
         }
 
+        impl Default for SdramPins {
+            /// Default SDRAM wiring of the vendor `SimplSDRAM` example, so callers
+            /// can write `SdramPins::default()` instead of spelling out every pad.
+            ///
+            /// Each pad is taken with the generated singleton's `steal()` -- the
+            /// same token `p.Pxy` would hand over -- so it must not be used
+            /// elsewhere at the same time.
+            fn default() -> Self {
+                unsafe {
+                    Self {
+                        $( $name: gpio::$pin::steal(), )+
+                    }
+                }
+            }
+        }
+
         /// The same pads, already routed, kept alive by the driver.
         ///
         /// Nothing ever reads these fields: holding the [`Flex`] is what keeps

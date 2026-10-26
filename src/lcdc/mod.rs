@@ -73,6 +73,22 @@ macro_rules! lcd_pins {
             $( pub $name: gpio::$pin, )+
         }
 
+        impl Default for LcdPins {
+            /// Default LCD wiring of the vendor `SimplLCD_RGB` example, so callers
+            /// can write `LcdPins::default()` instead of spelling out every pad.
+            ///
+            /// Each pad is taken with the generated singleton's `steal()` -- the
+            /// same token `p.Pxy` would hand over -- so it must not be used
+            /// elsewhere at the same time.
+            fn default() -> Self {
+                unsafe {
+                    Self {
+                        $( $name: gpio::$pin::steal(), )+
+                    }
+                }
+            }
+        }
+
         /// The same pads, already routed, kept alive by the driver.
         ///
         /// Nothing ever reads these fields: holding the [`Flex`] is what keeps
