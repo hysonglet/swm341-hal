@@ -37,7 +37,7 @@ use embassy_hal_internal::{into_ref, Peripheral, PeripheralRef};
 use crate::gpio::{self, Flex};
 use crate::mode::{Blocking, Mode};
 
-use instance::{IF_ERROR, IF_FRAMEDONE, Instance};
+use instance::{Instance, IF_ERROR, IF_FRAMEDONE};
 
 #[cfg(feature = "embassy")]
 use crate::mode::Async;
@@ -162,29 +162,6 @@ impl<'d, T: Instance, M: Mode> Lcd<'d, T, M> {
             _mode: core::marker::PhantomData,
         }
     }
-}
-
-impl<'d, T: Instance, M: Mode> Drop for Lcd<'d, T, M> {
-    fn drop(&mut self) {
-        T::clock().close();
-    }
-}
-
-impl<'d, T: Instance> Lcd<'d, T, Blocking> {
-    /// Take ownership of the LCD controller and open its clock gate.
-    ///
-    /// The pads are left alone: use this when something else already muxed them
-    /// onto the controller, otherwise [`Lcd::new_with_pins`].
-    pub fn new(peri: impl Peripheral<P = T> + 'd) -> Self {
-        into_ref!(peri);
-        Self::build(peri, None)
-    }
-
-    /// Mux every pad of `pins` onto the controller and take ownership of it.
-    pub fn new_with_pins(peri: impl Peripheral<P = T> + 'd, pins: LcdPins) -> Self {
-        into_ref!(peri);
-        Self::build(peri, Some(RoutedPins::route(pins)))
-    }
 
     /// Configure the controller timing, format and background color.
     pub fn configure(&self, config: &Config) {
@@ -246,6 +223,43 @@ impl<'d, T: Instance> Lcd<'d, T, Blocking> {
     pub fn set_error_interrupt(&self, enable: bool) {
         T::set_interrupt_enable(IF_ERROR, enable);
     }
+
+    /// Wait until the controller signals that a frame has completed.
+    ///
+    /// This is the interrupt-driven counterpart of polling `is_frame_done`: it
+    /// returns exactly at the frame-done edge, so an address written right after
+    /// it lands in the vertical blanking interval instead of mid-scan. That is
+    /// what keeps a framebuffer swap from tearing or blacking out the panel.
+    ///
+    /// The future is mode-agnostic: it works on a `Blocking` or `Async` handle,
+    /// the mode only selects which constructor bound the handle.
+    #[cfg(feature = "embassy")]
+    pub async fn wait_frame(&self) {
+        future::wait_frame::<T>().await;
+    }
+}
+
+impl<'d, T: Instance, M: Mode> Drop for Lcd<'d, T, M> {
+    fn drop(&mut self) {
+        T::clock().close();
+    }
+}
+
+impl<'d, T: Instance> Lcd<'d, T, Blocking> {
+    /// Take ownership of the LCD controller and open its clock gate.
+    ///
+    /// The pads are left alone: use this when something else already muxed them
+    /// onto the controller, otherwise [`Lcd::new_with_pins`].
+    pub fn new(peri: impl Peripheral<P = T> + 'd) -> Self {
+        into_ref!(peri);
+        Self::build(peri, None)
+    }
+
+    /// Mux every pad of `pins` onto the controller and take ownership of it.
+    pub fn new_with_pins(peri: impl Peripheral<P = T> + 'd, pins: LcdPins) -> Self {
+        into_ref!(peri);
+        Self::build(peri, Some(RoutedPins::route(pins)))
+    }
 }
 
 #[cfg(feature = "embassy")]
@@ -262,10 +276,5 @@ impl<'d, T: Instance> Lcd<'d, T, Async> {
     pub fn new_with_pins_async(peri: impl Peripheral<P = T> + 'd, pins: LcdPins) -> Self {
         into_ref!(peri);
         Self::build(peri, Some(RoutedPins::route(pins)))
-    }
-
-    /// Wait until the controller signals that a frame has been completed.
-    pub async fn wait_frame(&self) {
-        future::wait_frame::<T>().await;
     }
 }

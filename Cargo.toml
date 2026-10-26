@@ -145,6 +145,10 @@ name = "lcdc_block"
 name = "lcdc_gradient"
 
 [[example]]
+name = "embassy_lcdc"
+required-features = ["embassy"]
+
+[[example]]
 name = "sdramc_block"
 
 [profile.release]
