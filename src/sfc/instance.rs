@@ -4,11 +4,13 @@
 //! (D3..D8) are not routed to SPI0/SPI1 in the pin matrix, so this is the only
 //! peripheral that can talk to the on-board W25Q128. The SFC has two faces:
 //!
-//! * a *manual command* path (`CFG.CMDWREN` + `CMD`/`GO`) that sends one opcode
+//! * a *manual command* path (`CFG.CMDTYPE` + `CMD`/`GO`) that sends one opcode
 //!   and optionally returns bytes in `DATA` -- used for JEDEC ID, status
-//!   registers, and erase,
+//!   registers, erase and status-register writes,
 //! * an *AHB window* at `0x7000_0000` that transparently turns load/store
-//!   instructions into read/program transactions (the XIP path).
+//!   instructions into read/program transactions (the XIP path). The datasheet
+//!   states "读写操作仅支持 WORD", so every access to that window is a
+//!   word-sized, word-aligned access; byte-level helpers assemble words.
 //!
 //! All register operations live in the default methods of the sealed `Instance`
 //! trait; the public driver in [`crate::sfc`] only forwards to them.
@@ -19,35 +21,34 @@ use crate::pac;
 /// The register-block type backing the SFC.
 pub(crate) type Block = pac::sfc::RegisterBlock;
 
-/// Base address of the SPI-flash AHB window.
-pub(crate) const FLASH_BASE: u32 = 0x7000_0000;
+/// `CFG.CMDTYPE` values (datasheet 6.28.6).
+///
+/// Types 5, 6 and 7 make the hardware send the write-enable opcode stored in
+/// `CMDAHB.WREN` on its own before the command.
+pub(crate) const CMDTYPE_READ_STATUS: u8 = 1; // no address, one status byte -> DATA
+pub(crate) const CMDTYPE_READ_JEDEC: u8 = 2; // no address, three JEDEC bytes -> DATA
+pub(crate) const CMDTYPE_CHIP_ERASE: u8 = 5; // no address, no data, with WIP
+pub(crate) const CMDTYPE_WRITE_STATUS: u8 = 6; // no address, two data bytes -> status register
+pub(crate) const CMDTYPE_SECTOR_ERASE: u8 = 7; // uses ADDR, no data, with WIP
 
-/// Serial-flash opcodes shared with the vendor `SWM341_sfc.h`.
-pub(crate) const CMD_READ_JEDEC: u8 = 0x9F;
-pub(crate) const CMD_READ_SR1: u8 = 0x05;
-pub(crate) const CMD_READ_SR2: u8 = 0x35;
-pub(crate) const CMD_WRITE_SR1: u8 = 0x01;
-pub(crate) const CMD_ERASE_SECTOR: u8 = 0x20;
-pub(crate) const CMD_ERASE_BLOCK64K: u8 = 0xD8;
-pub(crate) const CMD_ERASE_CHIP: u8 = 0x60;
-
-/// `CFG.CMDTYPE` values for the manual-command path.
-pub(crate) const CMDTYPE_READ_STATUS: u8 = 1; // one status byte -> DATA
-pub(crate) const CMDTYPE_READ_JEDEC: u8 = 2; // three JEDEC bytes -> DATA
-pub(crate) const CMDTYPE_WRITE_STATUS: u8 = 6; // DATA -> status register
-pub(crate) const CMDTYPE_CHIP_ERASE: u8 = 5; // whole-chip erase
-pub(crate) const CMDTYPE_SECTOR_ERASE: u8 = 7; // sector/block erase (uses ADDR)
+/// Bit position of the Quad Enable flag inside status register 2.
+///
+/// The flash is written as a single 16-bit `SR2:SR1` pair, so the flag lives at
+/// bit 9 of that pair -- i.e. bit 1 of SR2.
+pub(crate) const STATUS_QUAD_BIT: u16 = 9;
 
 pub(crate) mod sealed {
 
-    use super::Block;
+    use super::{
+        Block, CMDTYPE_CHIP_ERASE, CMDTYPE_READ_JEDEC, CMDTYPE_READ_STATUS, CMDTYPE_SECTOR_ERASE,
+        CMDTYPE_WRITE_STATUS, STATUS_QUAD_BIT,
+    };
     use core::ptr;
     use cortex_m::asm;
 
-    use super::{
-        CMD_READ_JEDEC, CMD_READ_SR1, CMD_READ_SR2, CMD_WRITE_SR1, CMDTYPE_CHIP_ERASE,
-        CMDTYPE_READ_JEDEC, CMDTYPE_READ_STATUS, CMDTYPE_SECTOR_ERASE, CMDTYPE_WRITE_STATUS,
-        FLASH_BASE,
+    use crate::sfc::types::{
+        Config, Error, Flags, ProgramWidth, ReadWidth, CMD_READ_JEDEC, CMD_READ_STATUS_REG1,
+        CMD_READ_STATUS_REG2, CMD_WRITE_STATUS_REG1, FLASH_BASE, WIP_POLL_LIMIT,
     };
 
     /// Pulse `GO` and busy-wait for the controller to complete the transaction.
@@ -74,70 +75,51 @@ pub(crate) mod sealed {
         /// Pointer to this instance's register block.
         fn regs() -> *const Block;
 
-        /// Mux the dedicated Flash-SPI pads (D3..D8) onto the SFC and enable
-        /// their digital inputs. Called once from the driver constructor.
+        /// Program the controller from `config`: the vendor's undocumented
+        /// `BASE + 0x3F4` register, the clock divider and data widths, the AHB
+        /// read/program/write-enable/status opcodes, and the WIP polling
+        /// interval. Mirrors `SFC_Init()`.
+        ///
+        /// When either width is quad and the flash's Quad Enable bit is not yet
+        /// set, this also switches the flash into quad mode -- which the vendor
+        /// `SFC_Init()` does too. Status reads always run in 1-1-1 mode, so
+        /// that is safe before the switch.
         #[inline(always)]
-        fn configure_pins() {
-            let portd = unsafe { &*crate::pac::PORTD::ptr() };
-            unsafe {
-                // FUNC0 carries pads 0..=7, FUNC1 pads 8..=15 (4 bits each).
-                // D3/D4 = FSPI_DATA2/3 (WP/HOLD), D5 = SCLK, D6 = SSEL,
-                // D7 = MISO, D8 = MOSI.
-                portd.func0.modify(|_, w| {
-                    w.pin3()
-                        .bits(2)
-                        .pin4()
-                        .bits(2)
-                        .pin5()
-                        .bits(1)
-                        .pin6()
-                        .bits(1)
-                        .pin7()
-                        .bits(3)
-                });
-                portd.func1.modify(|_, w| w.pin8().bits(2));
-                portd.inen.modify(|_, w| {
-                    w.pin3()
-                        .set_bit()
-                        .pin4()
-                        .set_bit()
-                        .pin7()
-                        .set_bit()
-                        .pin8()
-                        .set_bit()
-                });
-            }
-        }
-
-        /// Program the controller: the vendor's undocumented `BASE + 0x3F4`
-        /// register, the clock divider and data widths, the AHB read/program
-        /// opcodes, and the WIP polling interval. Mirrors `SFC_Init()`.
-        #[inline(always)]
-        fn configure(
-            clk_div: u8,
-            read_width: u8,
-            program_width: u8,
-            read_cmd: u8,
-            program_cmd: u8,
-        ) {
+        fn configure(config: Config) {
             let regs = unsafe { &*Self::regs() };
             unsafe {
                 // Undocumented register poked by every vendor SFC routine.
                 ptr::write_volatile((regs as *const _ as *mut u8).offset(0x3F4) as *mut u32, 7);
 
-                // Clear the clock-divider and data-width fields, then set them.
-                let cfg = regs.cfg.read().bits();
-                let cfg = (cfg & !(0x3 << 6) & !(0x1 << 9) & !(0x1 << 10))
-                    | ((clk_div as u32 & 0x3) << 6)
-                    | ((program_width as u32 & 0x1) << 9)
-                    | ((read_width as u32 & 0x1) << 10);
-                regs.cfg.write(|w| w.bits(cfg));
+                regs.cfg.modify(|_, w| {
+                    w.clkdiv()
+                        .bits(config.clk_div as u8)
+                        .data4l_rd()
+                        .bits(config.read_width as u8)
+                        .data4l_pp()
+                        .bit(config.program_width == ProgramWidth::Quad)
+                        .addr4l()
+                        .bit(config.address_quad)
+                        // The vendor sets CMDWREN around the CMDAHB write.
+                        .cmdwren()
+                        .set_bit()
+                });
 
-                // AHB opcodes: bits 8..15 = page-program opcode, 24..31 = read.
-                regs.cmdahb
-                    .modify(|_, w| w.pp().bits(program_cmd).read().bits(read_cmd));
+                regs.cmdahb.modify(|_, w| {
+                    w.wren()
+                        .bits(config.write_enable_command)
+                        .pp()
+                        .bits(config.program_command)
+                        .rdsrl()
+                        .bits(config.read_status_command)
+                        .read()
+                        .bits(config.read_command)
+                });
 
-                // WIP polling interval (~0.2 ms) and limit (vendor default).
+                regs.cfg.modify(|_, w| w.cmdwren().clear_bit());
+
+                // WIP polling interval (~0.2 ms: 2048 * (N + 1) HCLK cycles)
+                // and limit (vendor default).
                 let mhz = crate::clock::sys_core_clock() / 1_000_000;
                 regs.tim.modify(|_, w| {
                     w.wip_chk_itv()
@@ -145,6 +127,12 @@ pub(crate) mod sealed {
                         .wip_chk_lmt()
                         .bits(255)
                 });
+            }
+
+            let wants_quad =
+                config.read_width == ReadWidth::Quad || config.program_width == ProgramWidth::Quad;
+            if wants_quad && !Self::quad_state() {
+                Self::set_quad(true);
             }
         }
 
@@ -165,7 +153,7 @@ pub(crate) mod sealed {
             regs.data.read().bits()
         }
 
-        /// Three JEDEC ID bytes (manufacturer, memory type, capacity).
+        /// Three JEDEC ID bytes, manufacturer first (bits `[23:16]`).
         #[inline(always)]
         fn read_jedec() -> u32 {
             Self::command(CMDTYPE_READ_JEDEC, CMD_READ_JEDEC)
@@ -177,27 +165,107 @@ pub(crate) mod sealed {
             Self::command(CMDTYPE_READ_STATUS, cmd) as u8
         }
 
-        /// True while the flash is busy with an erase or program.
+        /// True while the flash reports write-in-progress (SR1 bit 0).
         #[inline(always)]
         fn busy() -> bool {
-            Self::read_status(CMD_READ_SR1) & 0x01 != 0
+            Self::read_status(CMD_READ_STATUS_REG1) & 0x01 != 0
         }
 
-        /// Erase `addr` with `cmd` (sector/block), or the whole chip when
-        /// `addr == 0xFFFF_FFFF`. Mirrors `SFC_EraseEx()`.
+        /// True while the controller itself is busy: `SR.BUSY` covers both the
+        /// SPI transaction and the flash's write-in-progress period.
+        #[inline(always)]
+        fn controller_busy() -> bool {
+            unsafe { &*Self::regs() }.sr.read().busy().bit()
+        }
+
+        /// Poll the flash's write-in-progress flag until it clears.
+        #[inline(always)]
+        fn wait_wip(limit: u32) -> Result<(), Error> {
+            for _ in 0..limit {
+                if !Self::busy() {
+                    return Ok(());
+                }
+            }
+            Err(Error::Timeout)
+        }
+
+        /// Poll `SR.BUSY` until the controller goes idle.
+        #[inline(always)]
+        fn wait_controller(limit: u32) -> Result<(), Error> {
+            let regs = unsafe { &*Self::regs() };
+            for _ in 0..limit {
+                if !regs.sr.read().busy().bit() {
+                    return Ok(());
+                }
+            }
+            Err(Error::Timeout)
+        }
+
+        /// Write `val` to the flash status register selected by `cmd`.
+        ///
+        /// Fires the command and waits for `GO`, but does *not* wait for the
+        /// flash to finish writing -- that is [`Self::wait_wip`]'s job.
+        #[inline(always)]
+        fn write_status(cmd: u8, val: u16) {
+            let regs = unsafe { &*Self::regs() };
+            unsafe {
+                regs.cfg.modify(|_, w| {
+                    w.wren()
+                        .set_bit()
+                        .cmdwren()
+                        .set_bit()
+                        .cmdtype()
+                        .bits(CMDTYPE_WRITE_STATUS)
+                });
+                regs.cmd.write(|w| w.bits(cmd as u32));
+                regs.data.write(|w| w.bits(val as u32));
+            }
+
+            start(regs);
+
+            regs.cfg.modify(|_, w| w.wren().clear_bit());
+        }
+
+        /// Set (`on`) or clear the flash's Quad Enable bit, which lives at bit 1
+        /// of status register 2. Mirrors `SFC_QuadSwitch()`.
+        #[inline(always)]
+        fn set_quad(on: bool) {
+            let reg = ((Self::read_status(CMD_READ_STATUS_REG2) as u16) << 8)
+                | (Self::read_status(CMD_READ_STATUS_REG1) as u16);
+            let reg = if on {
+                reg | (1 << STATUS_QUAD_BIT)
+            } else {
+                reg & !(1 << STATUS_QUAD_BIT)
+            };
+
+            Self::write_status(CMD_WRITE_STATUS_REG1, reg);
+        }
+
+        /// Current value of the flash's Quad Enable bit. Mirrors
+        /// `SFC_QuadState()`.
+        #[inline(always)]
+        fn quad_state() -> bool {
+            Self::read_status(CMD_READ_STATUS_REG2) & 0x02 != 0
+        }
+
+        /// Erase `addr` with `cmd` (sector/32K block/64K block), or the whole
+        /// chip when `addr == u32::MAX`. Mirrors `SFC_EraseEx()`.
+        ///
+        /// Returns as soon as the command has been issued; the flash keeps
+        /// working until [`Self::wait_wip`] reports it idle.
         #[inline(always)]
         fn erase(addr: u32, cmd: u8) {
             let regs = unsafe { &*Self::regs() };
-            let cmd_type = if addr == 0xFFFF_FFFF {
+            let cmd_type = if addr == u32::MAX {
                 CMDTYPE_CHIP_ERASE
             } else {
                 CMDTYPE_SECTOR_ERASE
             };
 
             unsafe {
-                if addr != 0xFFFF_FFFF {
-                    regs.addr.write(|w| w.bits(addr));
-                }
+                // The datasheet wants the address written up front for every
+                // command type; chip erase simply ignores it.
+                regs.addr.write(|w| w.bits(addr));
                 regs.cfg.modify(|_, w| {
                     w.wren()
                         .set_bit()
@@ -212,44 +280,28 @@ pub(crate) mod sealed {
             start(regs);
 
             regs.cfg.modify(|_, w| w.wren().clear_bit());
-
-            // Wait for the flash itself to finish (WIP bit in SR1).
-            while Self::busy() {}
-        }
-
-        /// Set the flash's Quad Enable (status-register-2) bit on (`on`).
-        #[inline(always)]
-        fn set_quad(on: bool) {
-            let regs = unsafe { &*Self::regs() };
-            let reg = (Self::read_status(CMD_READ_SR2) as u16) << 8
-                | (Self::read_status(CMD_READ_SR1) as u16);
-            let reg = if on { reg | (1 << 9) } else { reg & !(1 << 9) };
-
-            unsafe {
-                regs.cfg.modify(|_, w| {
-                    w.wren()
-                        .set_bit()
-                        .cmdwren()
-                        .set_bit()
-                        .cmdtype()
-                        .bits(CMDTYPE_WRITE_STATUS)
-                });
-                regs.data.write(|w| w.bits(reg as u32));
-                regs.cmd.write(|w| w.bits(CMD_WRITE_SR1 as u32));
-            }
-
-            start(regs);
-
-            regs.cfg.modify(|_, w| w.wren().clear_bit());
-            while Self::busy() {}
         }
 
         /// Read `buf.len()` bytes starting at `addr` through the AHB window.
+        ///
+        /// The window only serves word accesses, so whole words are fetched and
+        /// the requested sub-range is copied out; `addr` and the length may be
+        /// arbitrary.
         #[inline(always)]
         fn read_memory(addr: u32, buf: &mut [u8]) {
-            let base = (FLASH_BASE + addr) as *const u8;
-            for (i, slot) in buf.iter_mut().enumerate() {
-                *slot = unsafe { ptr::read_volatile(base.add(i)) };
+            let mut word_addr = addr & !0x3;
+            let mut offset = (addr & 0x3) as usize;
+            let mut done = 0usize;
+
+            while done < buf.len() {
+                let word = unsafe { ptr::read_volatile((FLASH_BASE + word_addr) as *const u32) }
+                    .to_le_bytes();
+                let n = core::cmp::min(4 - offset, buf.len() - done);
+                buf[done..done + n].copy_from_slice(&word[offset..offset + n]);
+
+                done += n;
+                offset = 0;
+                word_addr += 4;
             }
         }
 
@@ -257,23 +309,64 @@ pub(crate) mod sealed {
         ///
         /// The caller must ensure `data` fits inside a single 256-byte page and
         /// that the target range was erased first; the SFC issues the
-        /// page-program opcode configured in `CMDAHB`.
+        /// page-program opcode configured in `CMDAHB`. Bytes outside the
+        /// requested range are padded with `0xFF`, which leaves an erased (or
+        /// already programmed) flash byte untouched.
         #[inline(always)]
         fn program_memory(addr: u32, data: &[u8]) {
             let regs = unsafe { &*Self::regs() };
 
-            // Enable writes so the AHB store triggers a page program.
+            // Enable writes so the AHB stores trigger a page program.
             regs.cfg.modify(|_, w| w.wren().set_bit());
 
-            let base = (FLASH_BASE + addr) as *mut u8;
-            for (i, &byte) in data.iter().enumerate() {
-                unsafe { ptr::write_volatile(base.add(i), byte) };
+            let mut word_addr = addr & !0x3;
+            let mut offset = (addr & 0x3) as usize;
+            let mut done = 0usize;
+
+            while done < data.len() {
+                let mut word = [0xFFu8; 4];
+                let n = core::cmp::min(4 - offset, data.len() - done);
+                word[offset..offset + n].copy_from_slice(&data[done..done + n]);
+                unsafe {
+                    ptr::write_volatile(
+                        (FLASH_BASE + word_addr) as *mut u32,
+                        u32::from_le_bytes(word),
+                    )
+                };
+
+                done += n;
+                offset = 0;
+                word_addr += 4;
             }
 
             // SFC state machine settles, then the flash WIP clears.
             while regs.sr.read().busy().bit() {}
             regs.cfg.modify(|_, w| w.wren().clear_bit());
-            while Self::busy() {}
+        }
+
+        /// Read the controller's interrupt flags (`IF`).
+        #[inline(always)]
+        fn flags() -> Flags {
+            let r = unsafe { &*Self::regs() }.if_.read();
+            Flags {
+                done: r.over().bit(),
+                error: r.err().bit(),
+                timeout: r.to().bit(),
+            }
+        }
+
+        /// Clear the controller's interrupt flags (`IF` is write-one-to-clear).
+        #[inline(always)]
+        fn clear_flags() {
+            unsafe { &*Self::regs() }
+                .if_
+                .write(|w| w.over().set_bit().err().set_bit().to().set_bit());
+        }
+
+        /// Wait for the flash to go idle using the default poll budget.
+        #[inline(always)]
+        fn wait_ready() -> Result<(), Error> {
+            Self::wait_wip(WIP_POLL_LIMIT)
         }
     }
 }
