@@ -30,6 +30,7 @@ use panic_halt as _;
 use rtt_target::{rprintln, rtt_init_print};
 
 use cortex_m::asm::delay;
+use embassy_time::Timer;
 
 use hal::gpio::{Level, Output, OutputConfig};
 use hal::lcdc::{Config, HvTiming, Lcd, LcdPins, PixelFormat};
@@ -116,8 +117,9 @@ async fn main(_spawner: Spawner) {
     let fb = hal::sdramc::SDRAM_BASE as *mut u16;
 
     // 6. Paint the first gradient frame into the framebuffer *before* starting
-    //    the scan-out, so the panel never shows stale SDRAM contents.
-    draw_gradient(fb, 0);
+    //    the scan-out, so the panel never shows stale SDRAM contents. A vertical
+    //    sweep (horizontal = false) matches `tick = 0` in the loop below.
+    draw_gradient(fb, 0, false);
 
     lcd.set_layer(
         0,
@@ -136,36 +138,47 @@ async fn main(_spawner: Spawner) {
     lcd.start_frame();
     rprintln!("LCD scanning out -- drawing gradient (async)");
 
-    // 7. Animation loop: repaint the framebuffer with a diagonally flowing
-    //    rainbow gradient and gate each frame on the frame-done interrupt
-    //    instead of a busy delay. The future yields the executor, so any other
-    //    spawned task runs between frames.
-    let mut frame: u32 = 1;
+    // 7. Animation loop: once a second, repaint the framebuffer with a rainbow
+    //    gradient and flip its direction between vertical (this second) and
+    //    horizontal (next second). `phase` also advances each second, so the
+    //    colors themselves switch, not just the orientation. The new frame is
+    //    gated on `wait_frame` (vsync) and then held on screen for the full
+    //    second; the executor is yielded the whole time instead of busy-waiting.
+    let mut tick: u32 = 0;
     loop {
-        draw_gradient(fb, frame);
-        frame = frame.wrapping_add(1);
+        let horizontal = tick % 2 == 1;
+        let phase = tick.wrapping_mul(8);
+        draw_gradient(fb, phase, horizontal);
 
         lcd.wait_frame().await;
+        Timer::after_secs(1).await;
 
-        if frame % 60 == 0 {
-            rprintln!("frame {}", frame);
-        }
+        tick = tick.wrapping_add(1);
+        rprintln!(
+            "switch {}: {} gradient",
+            tick,
+            if horizontal { "horizontal" } else { "vertical" }
+        );
     }
 }
 
-/// Paint a diagonally flowing RGB565 rainbow gradient into `fb`.
+/// Paint an RGB565 rainbow gradient into `fb`, switching direction each second.
 ///
-/// `t` shifts the pattern diagonally each frame. The rainbow is built from three
-/// phase-offset triangular waves so it stays smooth on a 5/6/5 color bus without
-/// any floating point or trig tables.
+/// `phase` shifts the whole pattern, so successive seconds show different
+/// colors -- a discrete switch rather than the old per-frame flow. When
+/// `horizontal` is set the color varies along the row (left-to-right); otherwise
+/// it varies down the column (top-to-bottom). The rainbow is built from three
+/// phase-offset triangular waves so it stays smooth on a 5/6/5 color bus with no
+/// floating point or trig tables.
 #[inline(always)]
-fn draw_gradient(fb: *mut u16, t: u32) {
+fn draw_gradient(fb: *mut u16, phase: u32, horizontal: bool) {
     for y in 0..HEIGHT as u32 {
         for x in 0..WIDTH as u32 {
-            // Vertical gradient: the phase depends only on the row `y` (and the
-            // frame counter `t`), so each row is a solid color and the rainbow
-            // sweeps top-to-bottom, scrolling downward over time.
-            let s = (y.wrapping_mul(256) / HEIGHT as u32).wrapping_add(t) & 0xFF;
+            // Drive the gradient from the row or the column depending on the
+            // orientation, so the sweep runs vertically or horizontally.
+            let c = if horizontal { x } else { y };
+            let span = if horizontal { WIDTH } else { HEIGHT } as u32;
+            let s = (c.wrapping_mul(256) / span).wrapping_add(phase) & 0xFF;
             let r = tri(s);
             let g = tri(s.wrapping_add(0x55));
             let b = tri(s.wrapping_add(0xAA));
