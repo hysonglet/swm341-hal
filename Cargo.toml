@@ -133,6 +133,9 @@ name = "sfc_flash_id"
 name = "sfc_block"
 
 [[example]]
+name = "sfc_xip"
+
+[[example]]
 name = "flash_block"
 
 [[example]]
