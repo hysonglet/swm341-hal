@@ -130,6 +130,9 @@ name = "qei_block"
 name = "sfc_flash_id"
 
 [[example]]
+name = "sfc_block"
+
+[[example]]
 name = "flash_block"
 
 [[example]]
