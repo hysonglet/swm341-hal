@@ -77,10 +77,7 @@ struct SdioPads<'d> {
 }
 
 /// Mux `pin` to `func` and return the handle that keeps it routed.
-fn route_pad<'d, P: crate::gpio::Pin>(
-    pin: impl Peripheral<P = P> + 'd,
-    func: u8,
-) -> Flex<'d, P> {
+fn route_pad<'d, P: crate::gpio::Pin>(pin: impl Peripheral<P = P> + 'd, func: u8) -> Flex<'d, P> {
     let flex = Flex::new(pin);
     crate::gpio::set_function::<P>(func);
     flex
@@ -213,10 +210,12 @@ impl<'d, T: Instance> Sdio<'d, T, Blocking> {
     ) -> Self {
         into_ref!(peri);
         T::clock().open();
-        T::power_on();
-        T::clock_enable(config.clock_divider);
-        T::set_bus_width(config.bus_width);
-        T::set_timeout(config.timeout);
+        T::init(config.clock_divider, config.timeout);
+        // SDIO cards are *always* initialised in 1-bit mode. The bus is widened to
+        // 4-bit only after the card has been addressed (CMD7) and told to switch via
+        // ACMD6 -- the vendor library follows exactly this order. Forcing 1-bit here
+        // keeps the bring-up correct even if the caller asked for 4-bit.
+        T::set_bus_width(BusWidth::Bus1);
         T::clear_interrupts();
         Self {
             peri,
@@ -236,8 +235,9 @@ impl<'d, T: Instance> Sdio<'d, T, Blocking> {
         }
     }
 
-    /// Re-apply the SD clock divider. The SD clock runs at
-    /// `peripheral_clock / (divider + 1)`.
+    /// Re-apply the SD clock divider. The requested `divider` is encoded into
+    /// `CR2.SDCLKDIV` (a set bit at position `n` => divisor `2^(n+1)`), giving an
+    /// SD clock of `(HCLK / 4) / 2^n`.
     pub fn configure_clock(&self, divider: u8) {
         T::clock_enable(divider);
     }
@@ -306,7 +306,15 @@ impl<'d, T: Instance> Sdio<'d, T, Blocking> {
         block_bytes: u16,
         block_count: u16,
     ) -> Result<(), SdioError> {
-        T::start_transfer(cmd, arg, ResponseType::Short, true, block_bytes, block_count, true)?;
+        T::start_transfer(
+            cmd,
+            arg,
+            ResponseType::Short,
+            true,
+            block_bytes,
+            block_count,
+            true,
+        )?;
         T::pio_read(buf)
     }
 
@@ -320,7 +328,15 @@ impl<'d, T: Instance> Sdio<'d, T, Blocking> {
         block_bytes: u16,
         block_count: u16,
     ) -> Result<(), SdioError> {
-        T::start_transfer(cmd, arg, ResponseType::Short, true, block_bytes, block_count, false)?;
+        T::start_transfer(
+            cmd,
+            arg,
+            ResponseType::Short,
+            true,
+            block_bytes,
+            block_count,
+            false,
+        )?;
         T::pio_write(buf)
     }
 }

@@ -11,7 +11,6 @@
 //! (generic GPIO) is omitted. The variants are the type-checked arguments to
 //! [`crate::sdio::Sdio::new`] and friends.
 
-
 /// Generate the per-pin `Pin{n}Func` enums for one bank module.
 ///
 /// Each entry is `PinType => Enum { Variant = func_code, ... }`; the macro

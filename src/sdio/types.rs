@@ -13,15 +13,26 @@ pub enum BusWidth {
     Bus8,
 }
 
-/// Expected response format of an SDIO command.
+/// Expected response format of an SDIO command, matching `CR2.CMD.RESPTYPE`.
+///
+/// Encoding (see the SWM341 datasheet, `RESPTYPE` field):
+/// * `0` -- no response (e.g. CMD0)
+/// * `1` -- 136-bit long response, R2 (CID/CSD)
+/// * `2` -- 48-bit short response, R1/R3/R4/R6/R7
+/// * `3` -- 48-bit short response with busy signalling (R1b/R5b)
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ResponseType {
     /// No response expected.
     None = 0,
-    /// 48-bit short response (`RESP[0]`).
-    Short = 1,
-    /// 136-bit long response (`RESP[0..3]`).
-    Long = 2,
+    /// 136-bit long response (`RESP[0..3]`), used for R2 (CID/CSD).
+    Long = 1,
+    /// 48-bit short response (`RESP[0]`), used for R1/R3/R4/R6/R7 and SDIO
+    /// CMD52/CMD53.
+    Short = 2,
+    /// 48-bit short response followed by a busy signal on DAT0 (R1b), used for
+    /// CMD7 (select card) and other commands that may keep the data line low
+    /// while the card processes.
+    Busy = 3,
 }
 
 /// An error reported by the SDIO controller.
@@ -63,8 +74,10 @@ impl SdioError {
 /// Configuration of the SDIO host.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Config {
-    /// SD clock divider (`CR2.SDCLKDIV`); the SD clock runs at
-    /// `peripheral_clock / (divider + 1)`.
+    /// Requested SD clock divisor. It is encoded into `CR2.SDCLKDIV` by the
+    /// driver (a single set bit at position `n` selects a divisor of `2^(n+1)`:
+    /// `0x00` => /1, `0x01` => /2, `0x02` => /4, `0x04` => /8, ...). The SD clock
+    /// ends up at `(HCLK / 4) / 2^n`, where the SDIO source clock is `HCLK / 4`.
     pub clock_divider: u8,
     /// Data bus width.
     pub bus_width: BusWidth,
@@ -75,10 +88,13 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            // A slow, safe divider; tighten it once the card is identified.
+            // A slow, safe divider (~146 kHz), matching the vendor's ~100 kHz init
+            // clock; tighten it once the card is identified.
             clock_divider: 0xFF,
             bus_width: BusWidth::Bus1,
-            timeout: 0xF,
+            // `0xC` is the vendor's value and a legal `CR2.TIMEOUT` encoding
+            // (`0xF` is reserved, so the previous default was invalid).
+            timeout: 0xC,
         }
     }
 }
@@ -94,10 +110,7 @@ impl Config {
 
     /// Override the bus width.
     pub fn bus_width(self, bus_width: BusWidth) -> Self {
-        Self {
-            bus_width,
-            ..self
-        }
+        Self { bus_width, ..self }
     }
 
     /// Override the data timeout.
