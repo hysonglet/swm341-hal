@@ -100,6 +100,11 @@ pub(crate) mod sealed {
 
             // Reset the whole controller before configuring it.
             regs.cr2.modify(|_, w| w.rstall().set_bit());
+            // Wait for the reset pulse to release before touching any other
+            // register: writing CR1/CR2 while the controller is still in reset
+            // silently drops (a "powered-off" controller ignores writes), which
+            // leaves PWRON/CLKEN clear and makes CMD0 time out with no error flag.
+            cortex_m::asm::delay(2000);
 
             // Power on and select the card-detect source. The vendor library sets
             // `CDSRC = 1` (internal card-detect source) and deliberately leaves
@@ -127,7 +132,15 @@ pub(crate) mod sealed {
             });
 
             // Wait for the clock to come up before any command is issued.
-            while !regs.cr2.read().clkrdy().bit() {}
+            // (Bounded: an empty bus / misconfigured source may never raise it,
+            // so spin at most `POLL_LIMIT` times instead of forever.)
+            let mut clkrdy_guard = 0u32;
+            while !regs.cr2.read().clkrdy().bit() {
+                clkrdy_guard += 1;
+                if clkrdy_guard > POLL_LIMIT {
+                    break;
+                }
+            }
 
             // The vendor library waits ~10 us after the clock is ready before
             // touching the controller further. At 150 MHz that is ~1500 cycles.
@@ -159,7 +172,13 @@ pub(crate) mod sealed {
                 w.clken().set_bit();
                 w.sdclken().set_bit()
             });
-            while !regs.cr2.read().clkrdy().bit() {}
+            let mut clkrdy_guard = 0u32;
+            while !regs.cr2.read().clkrdy().bit() {
+                clkrdy_guard += 1;
+                if clkrdy_guard > POLL_LIMIT {
+                    break;
+                }
+            }
         }
 
         /// Disable the SD clock.
