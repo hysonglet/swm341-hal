@@ -193,6 +193,25 @@ fn main() -> ! {
         sd.send_command(16, 512, ResponseType::Short, false, false)?;
         rprintln!("CMD16 OK: block length = 512");
 
+        // --- High-speed switch (CMD6) -------------------------------------------
+        // Default-speed mode caps the SD clock at 25 MHz, so the data phase above
+        // runs at ~18 MHz. Switching the card into high-speed mode raises the
+        // ceiling to 50 MHz, letting the bus run at (HCLK/4)/1 = ~37.5 MHz. This
+        // mirrors the vendor `SDIO_HighSpeed()`: send CMD6 (switch-function,
+        // mode = 1) with arg 0x80FFFF01, read back the 512-bit (64-byte) status
+        // block and check that the timing-mode group reports function 1 selected.
+        // If the card does not support it we keep the safe 18 MHz clock rather than
+        // overclocking a default-speed card.
+        let mut hs_status = [0u32; 512 / 8 / 4]; // 64 bytes = 16 words
+        sd.read_blocks(6, 0x80FFFF01, &mut hs_status, 64, 1)?;
+        if (hs_status[4] & 0xF) == 1 {
+            // /1 => ~37.5 MHz, safely under the 50 MHz high-speed ceiling.
+            sd.configure_clock(1);
+            rprintln!("High-speed mode ON: SD clock raised to ~37.5 MHz");
+        } else {
+            rprintln!("High-speed not supported: staying at ~18 MHz");
+        }
+
         // --- Block read/write verification --------------------------------------
         // SDHC/SDXC address by block number; SDSC address by byte offset.
         let block_addr = |block: u32| -> u32 {
