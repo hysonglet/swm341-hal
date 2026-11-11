@@ -228,7 +228,7 @@ pub(crate) fn set_function<P: Pin>(function: u8) {
 }
 
 #[inline(always)]
-fn set_direction<P: Pin>(output: bool) {
+pub(crate) fn set_direction<P: Pin>(output: bool) {
     <P as sealed::Pin>::Port::set_direction(P::number(), output);
 }
 
@@ -238,7 +238,7 @@ pub(crate) fn set_pull<P: Pin>(pull: Pull) {
 }
 
 #[inline(always)]
-fn set_output_options<P: Pin>(output_type: OutputType, speed: Speed) {
+pub(crate) fn set_output_options<P: Pin>(output_type: OutputType, speed: Speed) {
     <P as sealed::Pin>::Port::set_output_options(P::number(), output_type, speed);
 }
 
@@ -253,12 +253,12 @@ pub(crate) fn set_i2c_pad<P: Pin>() {
 }
 
 #[inline(always)]
-fn write_level<P: Pin>(level: Level) {
+pub(crate) fn write_level<P: Pin>(level: Level) {
     <P as sealed::Pin>::Port::set_level(P::number(), level);
 }
 
 #[inline(always)]
-fn read_level<P: Pin>() -> Level {
+pub(crate) fn read_level<P: Pin>() -> Level {
     if <P as sealed::Pin>::Port::read(P::number()) {
         Level::High
     } else {

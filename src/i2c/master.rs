@@ -31,7 +31,10 @@
 
 use embassy_hal_internal::{into_ref, Peripheral, PeripheralRef};
 
-use crate::gpio::Pin;
+use crate::gpio::{
+    read_level, set_direction, set_function, set_i2c_pad, set_output_options, set_pull, write_level,
+    Level, OutputType, Pin, Pull, Speed,
+};
 use crate::mode::{Blocking, Mode};
 
 use super::instance::Instance;
@@ -142,9 +145,13 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin, M: Mode> I2c<'d, T, Scl, Sda, M> {
     }
 
     /// Terminate the transfer with STOP and wait until the bus is idle.
+    ///
+    /// 注意：即使 `wait_cmd` 超时也**必须**清掉标志位并返回 Ok——否则故障标志会残留，
+    /// 让后续每一次传输都立刻报错、总线再也无法恢复。`let _ = Self::finish();`
+    /// 的调用方本就忽略返回值，所以这里以“尽力恢复”为准则。
     fn finish() -> Result<(), Error> {
         T::stop();
-        Self::wait_cmd()?;
+        let _ = Self::wait_cmd();
         Self::wait_bus_free();
         T::clear_flags();
         Ok(())
@@ -176,6 +183,68 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2c<'d, T, Scl, Sda, Blocking> {
     {
         Self::build(peri, scl, sda, config)
     }
+
+    /// 总线锁死后的恢复（标准 I2C “bus clear”）。
+    ///
+    /// 若 GT911 在半字节传输途中被中断而没收到 STOP，它会长久把 SDA 拉低（继续等时钟）。
+    /// 此时控制器再发 STOP 也解不开——`disable()` 只会让 MCU 释放 SCL，SDA 仍被从设备
+    /// 拉住，于是之后每笔传输都超时、UI 直接卡死。唯一办法是手动给 SCL 补几个时钟脉冲，
+    /// 让从设备把剩余位走完并释放 SDA，再重新初始化控制器。
+    ///
+    /// 全程在 `&mut self` 上完成，无需重新申请 GPIO 引脚。每次 I2C 事务返回 `Err` 后调一次
+    /// 即可让总线在下一帧恢复正常。
+    pub fn reset(&mut self)
+    where
+        Scl: I2cSclPin<T>,
+        Sda: I2cSdaPin<T>,
+    {
+        // 1) 把 SCL/SDA 临时切回 GPIO：SCL 当开漏输出由 MCU 驱动，SDA 当输入让从设备
+        //    自由驱动，以便观测它何时释放 SDA。
+        set_function::<Scl>(0); // 0 = GPIO
+        set_output_options::<Scl>(OutputType::OpenDrain, Speed::Normal);
+        set_pull::<Scl>(Pull::Up);
+        set_direction::<Scl>(true);
+
+        set_function::<Sda>(0);
+        set_pull::<Sda>(Pull::Up);
+        set_direction::<Sda>(false); // 输入
+
+        // 2) 补 9 个 SCL 脉冲；每补一个就检查 SDA 是否已被从设备释放（拉高）。
+        write_level::<Scl>(Level::High);
+        for _ in 0..9 {
+            write_level::<Scl>(Level::Low);
+            for _ in 0..600 {
+                core::hint::spin_loop();
+            }
+            write_level::<Scl>(Level::High);
+            for _ in 0..600 {
+                core::hint::spin_loop();
+            }
+            if read_level::<Sda>() == Level::High {
+                break;
+            }
+        }
+
+        // 3) 补一个 STOP 序列：SCL 已为高，SDA 由低拉高。
+        set_output_options::<Sda>(OutputType::OpenDrain, Speed::Normal);
+        set_direction::<Sda>(true);
+        write_level::<Sda>(Level::Low);
+        for _ in 0..600 {
+            core::hint::spin_loop();
+        }
+        write_level::<Sda>(Level::High);
+
+        // 4) 恢复 I2C 复用与控制器寄存器。
+        set_i2c_pad::<Scl>();
+        set_i2c_pad::<Sda>();
+        set_function::<Scl>(<Scl as I2cSclPin<T>>::FUNC);
+        set_function::<Sda>(<Sda as I2cSdaPin<T>>::FUNC);
+
+        T::clock().open();
+        T::disable();
+        T::set_clock(400_000);
+        T::enable_master();
+    }
 }
 
 #[cfg(feature = "embassy")]
@@ -205,7 +274,10 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2c<'d, T, Scl, Sda, Blocking> {
             }
             Ok(())
         })();
-        result.and(Self::finish())
+        // 关键：无论读写出错与否都要发出 STOP 并清标志，否则 NAK 等错误会把总线
+        // 卡在传输中途，下一次操作就会一直超时（表现为触摸用久了卡死）。
+        let _ = Self::finish();
+        result
     }
 
     /// Blocking read of `buffer` from the slave at `address`.
@@ -221,7 +293,8 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2c<'d, T, Scl, Sda, Blocking> {
             }
             Ok(())
         })();
-        result.and(Self::finish())
+        let _ = Self::finish();
+        result
     }
 
     /// Blocking write followed by a repeated-start read, with no stop in between.
@@ -245,7 +318,8 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2c<'d, T, Scl, Sda, Blocking> {
             }
             Ok(())
         })();
-        result.and(Self::finish())
+        let _ = Self::finish();
+        result
     }
 }
 
