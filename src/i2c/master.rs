@@ -15,25 +15,27 @@
 //! ```no_run
 //! # use swm341_hal as hal;
 //! # let p = hal::init(Default::default());
-//! use hal::i2c::pins;
 //! let mut i2c = hal::i2c::I2c::new(
 //!     p.i2c0(),
-//!     p.PC2,  pins::c::Pin2Func::I2c0Scl,
-//!     p.PC1,  pins::c::Pin1Func::I2c0Sda,
+//!     p.PC2,  // SCL
+//!     p.PC1,  // SDA
 //!     hal::i2c::Config::default(),
 //! );
 //! i2c.blocking_write(0x50, &[0x00, 0x10]).unwrap();
 //! let mut data = [0u8; 2];
 //! i2c.blocking_read(0x50, &mut data).unwrap();
 //! ```
+//!
+//! The SCL/SDA `PORTx.FUNC` codes come from the pin types and the I2C instance
+//! via [`I2cSclPin`]/[`I2cSdaPin`], so no alternate-function value is needed.
 
 use embassy_hal_internal::{into_ref, Peripheral, PeripheralRef};
 
-use crate::gpio::{Pin, PinFuncOf};
+use crate::gpio::Pin;
 use crate::mode::{Blocking, Mode};
 
 use super::instance::Instance;
-use super::{Config, Error};
+use super::{Config, Error, I2cSclPin, I2cSdaPin};
 
 #[cfg(feature = "embassy")]
 use crate::mode::Async;
@@ -53,28 +55,36 @@ pub struct I2c<'d, T: Instance, Scl: Pin, Sda: Pin, M: Mode = Blocking> {
 impl<'d, T: Instance, Scl: Pin, Sda: Pin, M: Mode> I2c<'d, T, Scl, Sda, M> {
     /// Build an I2C master from its peripheral and the two pads.
     ///
-    /// Each `x_func` picks the alternate function of its pad; only the
-    /// [`crate::gpio::PinFuncOf`] value that belongs to that exact pad type checks,
-    /// so a wrong pad is a compile error. This is the shared constructor used by
-    /// [`I2c::new`] and [`I2c::new_async`].
+    /// The SCL/SDA `PORTx.FUNC` codes are derived from `scl`/`sda` and the I2C
+    /// instance `T` via [`I2cSclPin`]/[`I2cSdaPin`], so only the pins themselves
+    /// are needed; a pad that cannot serve the requested role is a compile
+    /// error. This is the shared constructor used by [`I2c::new`] and
+    /// [`I2c::new_async`].
     pub(crate) fn build(
         peri: impl Peripheral<P = T> + 'd,
         scl: impl Peripheral<P = Scl> + 'd,
-        scl_func: impl PinFuncOf<Scl>,
         sda: impl Peripheral<P = Sda> + 'd,
-        sda_func: impl PinFuncOf<Sda>,
         config: Config,
-    ) -> Self {
+    ) -> Self
+    where
+        Scl: I2cSclPin<T>,
+        Sda: I2cSdaPin<T>,
+    {
         into_ref!(peri, scl, sda);
 
         T::clock().open();
         crate::gpio::acquire::<Scl>();
         crate::gpio::acquire::<Sda>();
-        crate::gpio::set_function::<Scl>(scl_func.value());
-        crate::gpio::set_function::<Sda>(sda_func.value());
+        crate::gpio::set_function::<Scl>(<Scl as I2cSclPin<T>>::FUNC);
+        crate::gpio::set_function::<Sda>(<Sda as I2cSdaPin<T>>::FUNC);
+        crate::gpio::set_i2c_pad::<Scl>();
+        crate::gpio::set_i2c_pad::<Sda>();
 
-        T::enable_master();
+        // Registers must be programmed while EN = 0 (datasheet master init
+        // flow). enable_master() also clears stale interrupt flags.
+        T::disable();
         T::set_clock(config.frequency);
+        T::enable_master();
 
         Self {
             peri,
@@ -84,13 +94,13 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin, M: Mode> I2c<'d, T, Scl, Sda, M> {
         }
     }
 
-    /// Wait until TXE is set, clearing it; abort on a bus fault.
-    fn wait_txe() -> Result<(), Error> {
+    /// Wait until the hardware clears the current MCR command (START, a byte
+    /// or STOP), aborting on a bus fault or a stuck line.
+    fn wait_cmd() -> Result<(), Error> {
         let mut timeout = TIMEOUT;
         loop {
             T::check_faults()?;
-            if T::is_txe() {
-                T::clear_txe();
+            if T::cmd_done() {
                 return Ok(());
             }
             timeout -= 1;
@@ -100,52 +110,44 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin, M: Mode> I2c<'d, T, Scl, Sda, M> {
         }
     }
 
-    /// Wait until RXNE is set, clearing it; abort on a bus fault.
-    fn wait_rxne() -> Result<(), Error> {
-        let mut timeout = TIMEOUT;
-        loop {
-            T::check_faults()?;
-            if T::is_rxne() {
-                T::clear_rxne();
-                return Ok(());
-            }
-            timeout -= 1;
-            if timeout == 0 {
-                return Err(Error::Timeout);
-            }
+    /// Send a (repeated) START followed by the 7-bit address / R-W byte and
+    /// verify the slave acknowledged it.
+    fn start_addr(address: u8, read: bool) -> Result<(), Error> {
+        T::txdata((address << 1) | u8::from(read));
+        T::start();
+        Self::wait_cmd()?;
+        if !T::acked() {
+            return Err(Error::NoAcknowledge);
         }
+        Ok(())
     }
 
-    /// Wait until TXDONE is set, clearing it; abort on a bus fault.
-    fn wait_txdone() -> Result<(), Error> {
-        let mut timeout = TIMEOUT;
-        loop {
-            T::check_faults()?;
-            if T::is_txdone() {
-                T::clear_txdone();
-                return Ok(());
-            }
-            timeout -= 1;
-            if timeout == 0 {
-                return Err(Error::Timeout);
-            }
+    /// Transmit one data byte and verify its ACK.
+    fn write_byte(byte: u8) -> Result<(), Error> {
+        T::txdata(byte);
+        T::request_write();
+        Self::wait_cmd()?;
+        if !T::acked() {
+            return Err(Error::NoAcknowledge);
         }
+        Ok(())
     }
 
-    /// Wait until RXDONE is set, clearing it; abort on a bus fault.
-    fn wait_rxdone() -> Result<(), Error> {
-        let mut timeout = TIMEOUT;
-        loop {
-            T::check_faults()?;
-            if T::is_rxdone() {
-                T::clear_rxdone();
-                return Ok(());
-            }
-            timeout -= 1;
-            if timeout == 0 {
-                return Err(Error::Timeout);
-            }
-        }
+    /// Receive one byte; `nack` makes the master NACK it (last byte of a read
+    /// phase) instead of ACKing it.
+    fn read_byte(nack: bool) -> Result<u8, Error> {
+        T::request_read(nack);
+        Self::wait_cmd()?;
+        Ok(T::rx_byte())
+    }
+
+    /// Terminate the transfer with STOP and wait until the bus is idle.
+    fn finish() -> Result<(), Error> {
+        T::stop();
+        Self::wait_cmd()?;
+        Self::wait_bus_free();
+        T::clear_flags();
+        Ok(())
     }
 
     /// Spin until the bus returns to idle.
@@ -165,12 +167,14 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2c<'d, T, Scl, Sda, Blocking> {
     pub fn new(
         peri: impl Peripheral<P = T> + 'd,
         scl: impl Peripheral<P = Scl> + 'd,
-        scl_func: impl PinFuncOf<Scl>,
         sda: impl Peripheral<P = Sda> + 'd,
-        sda_func: impl PinFuncOf<Sda>,
         config: Config,
-    ) -> Self {
-        Self::build(peri, scl, scl_func, sda, sda_func, config)
+    ) -> Self
+    where
+        Scl: I2cSclPin<T>,
+        Sda: I2cSdaPin<T>,
+    {
+        Self::build(peri, scl, sda, config)
     }
 }
 
@@ -180,30 +184,28 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2c<'d, T, Scl, Sda, Async> {
     pub fn new_async(
         peri: impl Peripheral<P = T> + 'd,
         scl: impl Peripheral<P = Scl> + 'd,
-        scl_func: impl PinFuncOf<Scl>,
         sda: impl Peripheral<P = Sda> + 'd,
-        sda_func: impl PinFuncOf<Sda>,
         config: Config,
-    ) -> Self {
-        Self::build(peri, scl, scl_func, sda, sda_func, config)
+    ) -> Self
+    where
+        Scl: I2cSclPin<T>,
+        Sda: I2cSdaPin<T>,
+    {
+        Self::build(peri, scl, sda, config)
     }
 }
 
 impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2c<'d, T, Scl, Sda, Blocking> {
     /// Blocking write of `bytes` to the slave at `address`.
     pub fn blocking_write(&mut self, address: u8, bytes: &[u8]) -> Result<(), Error> {
-        T::txdata(address << 1);
-        T::start();
-        Self::wait_txe()?;
-        for &b in bytes {
-            T::txdata(b);
-            T::request_write();
-            Self::wait_txe()?;
-        }
-        Self::wait_txdone()?;
-        T::stop();
-        Self::wait_bus_free();
-        Ok(())
+        let result: Result<(), Error> = (|| {
+            Self::start_addr(address, false)?;
+            for &b in bytes {
+                Self::write_byte(b)?;
+            }
+            Ok(())
+        })();
+        result.and(Self::finish())
     }
 
     /// Blocking read of `buffer` from the slave at `address`.
@@ -211,19 +213,15 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2c<'d, T, Scl, Sda, Blocking> {
         if buffer.is_empty() {
             return Ok(());
         }
-        T::txdata((address << 1) | 1);
-        T::start();
-        Self::wait_txe()?;
-        let len = buffer.len();
-        for (i, slot) in buffer.iter_mut().enumerate() {
-            let last = i + 1 == len;
-            T::request_read(last);
-            Self::wait_rxne()?;
-            *slot = T::rx_byte();
-        }
-        Self::wait_rxdone()?;
-        Self::wait_bus_free();
-        Ok(())
+        let result: Result<(), Error> = (|| {
+            Self::start_addr(address, true)?;
+            let len = buffer.len();
+            for (i, slot) in buffer.iter_mut().enumerate() {
+                *slot = Self::read_byte(i + 1 == len)?;
+            }
+            Ok(())
+        })();
+        result.and(Self::finish())
     }
 
     /// Blocking write followed by a repeated-start read, with no stop in between.
@@ -233,33 +231,21 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2c<'d, T, Scl, Sda, Blocking> {
         write: &[u8],
         read: &mut [u8],
     ) -> Result<(), Error> {
-        T::txdata(address << 1);
-        T::start();
-        Self::wait_txe()?;
-        for &b in write {
-            T::txdata(b);
-            T::request_write();
-            Self::wait_txe()?;
-        }
-        if read.is_empty() {
-            Self::wait_txdone()?;
-            T::stop();
-            Self::wait_bus_free();
-            return Ok(());
-        }
-        T::txdata((address << 1) | 1);
-        T::start();
-        Self::wait_txe()?;
-        let len = read.len();
-        for (i, slot) in read.iter_mut().enumerate() {
-            let last = i + 1 == len;
-            T::request_read(last);
-            Self::wait_rxne()?;
-            *slot = T::rx_byte();
-        }
-        Self::wait_rxdone()?;
-        Self::wait_bus_free();
-        Ok(())
+        let result: Result<(), Error> = (|| {
+            Self::start_addr(address, false)?;
+            for &b in write {
+                Self::write_byte(b)?;
+            }
+            if !read.is_empty() {
+                Self::start_addr(address, true)?;
+                let len = read.len();
+                for (i, slot) in read.iter_mut().enumerate() {
+                    *slot = Self::read_byte(i + 1 == len)?;
+                }
+            }
+            Ok(())
+        })();
+        result.and(Self::finish())
     }
 }
 
@@ -277,48 +263,33 @@ impl<T: Instance, Scl: Pin, Sda: Pin> embedded_hal::i2c::I2c<u8>
         address: u8,
         operations: &mut [embedded_hal::i2c::Operation<'_>],
     ) -> Result<(), Self::Error> {
-        let last = operations.len().saturating_sub(1);
-        // `true` = a write phase is in progress, `false` = a read phase.
-        let mut prev_write: Option<bool> = None;
-        for (oi, op) in operations.iter_mut().enumerate() {
-            let is_last = oi == last;
-            match op {
-                embedded_hal::i2c::Operation::Write(bytes) => {
-                    if prev_write != Some(true) {
-                        T::txdata(address << 1);
-                        T::start();
-                        Self::wait_txe()?;
-                    }
-                    for (bi, &b) in bytes.iter().enumerate() {
-                        let last_byte = is_last && bi + 1 == bytes.len();
-                        T::txdata(b);
-                        T::request_write();
-                        Self::wait_txe()?;
-                        if last_byte {
-                            T::stop();
+        if operations.is_empty() {
+            return Ok(());
+        }
+        // Each operation is addressed on its own: the first START opens the
+        // transfer, a repeated START separates operations, and one STOP closes
+        // it. This is exactly what register-address-then-read slaves need.
+        let result: Result<(), Error> = (|| {
+            for op in operations.iter_mut() {
+                match op {
+                    embedded_hal::i2c::Operation::Write(bytes) => {
+                        Self::start_addr(address, false)?;
+                        for &b in bytes.iter() {
+                            Self::write_byte(b)?;
                         }
                     }
-                    prev_write = Some(true);
-                }
-                embedded_hal::i2c::Operation::Read(buffer) => {
-                    if prev_write != Some(false) {
-                        T::txdata((address << 1) | 1);
-                        T::start();
-                        Self::wait_txe()?;
+                    embedded_hal::i2c::Operation::Read(buffer) => {
+                        Self::start_addr(address, true)?;
+                        let len = buffer.len();
+                        for (i, slot) in buffer.iter_mut().enumerate() {
+                            *slot = Self::read_byte(i + 1 == len)?;
+                        }
                     }
-                    let len = buffer.len();
-                    for (bi, slot) in buffer.iter_mut().enumerate() {
-                        let last_byte = is_last && bi + 1 == len;
-                        T::request_read(last_byte);
-                        Self::wait_rxne()?;
-                        *slot = T::rx_byte();
-                    }
-                    prev_write = Some(false);
                 }
             }
-        }
-        Self::wait_bus_free();
-        Ok(())
+            Ok(())
+        })();
+        result.and(Self::finish())
     }
 }
 

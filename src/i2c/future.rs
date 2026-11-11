@@ -22,41 +22,29 @@ pub(crate) fn on_irq<T: Instance>() {
 }
 
 /// State of the [`master`] state machine.
+#[derive(Clone, Copy)]
 enum Step {
-    /// Decide the address / direction of the first operation and emit a START.
+    /// Emit START + the address byte for the current operation.
     Init,
-    /// START + address (for the current operation) sent, waiting for TXE.
+    /// Address byte sent; waiting for TXDONE to check the ACK.
     Addr,
-    /// A write data byte loaded, waiting for TXE before the next byte or the
-    /// repeated START / STOP that ends the operation.
+    /// A write data byte sent; waiting for TXDONE.
     WData,
-    /// A read data byte requested, waiting for RXNE.
+    /// A read byte requested; waiting for RXDONE.
     RData,
-    /// All read bytes of the current operation received, waiting for RXDONE
-    /// before a repeated START (or, for the last op, before returning).
-    RxDone,
-    /// All write bytes of the final operation sent, waiting for TXDONE + STOP.
-    TxDone,
-    /// Current operation finished; load the next operation's address and emit a
-    /// (repeated) START — the only place a START is generated mid-transfer.
+    /// Current operation finished; move on to the next one.
     Next,
-    /// Transfer finished; clear interrupts and return.
+    /// Transfer finished; STOP, release the IRQ and return.
     Done,
 }
 
 /// Run a full I2C master transaction over `operations`.
 ///
-/// Framing is strict, matching [`embedded_hal_async::i2c::I2c::transaction`]:
-/// one START opens the first operation, a (repeated) START separates every
-/// following operation, and a single STOP ends the whole transfer. This is what
-/// register-address-then-read slaves need, where a STOP between the two phases
-/// would abort the access.
-///
-/// A read byte carries `STO` only when it is the last byte of the *last*
-/// operation, so a repeated START can follow an earlier read. (The SWM341 master
-/// ACKs the final byte of a non-final read op; devices that require a NACK before
-/// a repeated START are therefore not supported for read-then-read / read-then-write
-/// sequences — the common write-then-read, write-only and read-only cases are fine.)
+/// Framing matches [`embedded_hal_async::i2c::I2c::transaction`]: a START
+/// opens each operation (a repeated START after the first), and one STOP ends
+/// the whole transfer. Every byte is waited out to completion before the next
+/// MCR command is issued — the hardware ignores a new WR/RD while one is still
+/// in flight — and the ACK/NACK of transmitted bytes is checked.
 pub(crate) async fn master<T: Instance>(
     address: u8,
     operations: &mut [embedded_hal_async::i2c::Operation<'_>],
@@ -65,6 +53,9 @@ pub(crate) async fn master<T: Instance>(
     let mut step = Step::Init;
     let mut op_idx = 0usize;
     let mut byte_idx = 0usize;
+
+    T::disable_all_irqs();
+    T::clear_flags();
 
     poll_fn(|cx| {
         WAKER[idx].register(cx.waker());
@@ -79,112 +70,79 @@ pub(crate) async fn master<T: Instance>(
                         step = Step::Done;
                         continue;
                     }
-                    let dir = direction(operations, op_idx, address);
-                    T::txdata(dir);
+                    T::txdata(direction(operations, op_idx, address));
                     T::start();
                     step = Step::Addr;
                 }
                 Step::Addr => {
-                    if !T::is_txe() {
-                        T::set_txe_irq(true);
-                        unsafe { T::irq().enable() };
-                        return Poll::Pending;
-                    }
-                    T::clear_txe();
-                    let is_write = matches!(operations[op_idx], Operation::Write(_));
-                    let len = op_len(operations, op_idx);
-                    if is_write {
-                        if byte_idx < len {
-                            let byte = read_byte(operations, op_idx, byte_idx);
-                            byte_idx += 1;
-                            T::txdata(byte);
-                            T::request_write();
-                            step = Step::WData;
-                        } else if op_idx + 1 == operations.len() {
-                            step = Step::TxDone;
-                        } else {
-                            step = Step::Next;
-                        }
-                    } else if byte_idx < len {
-                        let last = (byte_idx + 1 == len) && (op_idx + 1 == operations.len());
-                        T::request_read(last);
-                        step = Step::RData;
-                    } else {
-                        step = Step::RxDone;
-                    }
-                }
-                Step::WData => {
-                    if !T::is_txe() {
-                        T::set_txe_irq(true);
-                        unsafe { T::irq().enable() };
-                        return Poll::Pending;
-                    }
-                    T::clear_txe();
-                    let len = op_len(operations, op_idx);
-                    if byte_idx < len {
-                        let byte = read_byte(operations, op_idx, byte_idx);
-                        byte_idx += 1;
-                        T::txdata(byte);
-                        T::request_write();
-                    } else if op_idx + 1 == operations.len() {
-                        step = Step::TxDone;
-                    } else {
-                        step = Step::Next;
-                    }
-                }
-                Step::RData => {
-                    if !T::is_rxne() {
-                        T::set_rxne_irq(true);
-                        unsafe { T::irq().enable() };
-                        return Poll::Pending;
-                    }
-                    T::clear_rxne();
-                    let len = op_len(operations, op_idx);
-                    if byte_idx < len {
-                        let slot = match &mut operations[op_idx] {
-                            Operation::Read(buf) => &mut buf[byte_idx],
-                            _ => unreachable!(),
-                        };
-                        *slot = T::rx_byte();
-                        byte_idx += 1;
-                        let last = (byte_idx + 1 == len) && (op_idx + 1 == operations.len());
-                        T::request_read(last);
-                    } else {
-                        step = Step::RxDone;
-                    }
-                }
-                Step::RxDone => {
-                    if !T::is_rxdone() {
-                        T::set_rxdone_irq(true);
-                        unsafe { T::irq().enable() };
-                        return Poll::Pending;
-                    }
-                    T::clear_rxdone();
-                    if op_idx + 1 == operations.len() {
-                        step = Step::Done;
-                    } else {
-                        step = Step::Next;
-                    }
-                }
-                Step::Next => {
-                    op_idx += 1;
-                    byte_idx = 0;
-                    let dir = direction(operations, op_idx, address);
-                    T::txdata(dir);
-                    T::start();
-                    step = Step::Addr;
-                }
-                Step::TxDone => {
                     if !T::is_txdone() {
                         T::set_txdone_irq(true);
                         unsafe { T::irq().enable() };
                         return Poll::Pending;
                     }
                     T::clear_txdone();
-                    T::stop();
-                    step = Step::Done;
+                    if !T::acked() {
+                        T::disable_all_irqs();
+                        return Poll::Ready(Err(Error::NoAcknowledge));
+                    }
+                    step = dispatch::<T>(
+                        operations,
+                        op_idx,
+                        &mut byte_idx,
+                        op_idx + 1 == operations.len(),
+                    );
+                }
+                Step::WData => {
+                    if !T::is_txdone() {
+                        T::set_txdone_irq(true);
+                        unsafe { T::irq().enable() };
+                        return Poll::Pending;
+                    }
+                    T::clear_txdone();
+                    if !T::acked() {
+                        T::disable_all_irqs();
+                        return Poll::Ready(Err(Error::NoAcknowledge));
+                    }
+                    step = dispatch::<T>(
+                        operations,
+                        op_idx,
+                        &mut byte_idx,
+                        op_idx + 1 == operations.len(),
+                    );
+                }
+                Step::RData => {
+                    if !T::is_rxdone() {
+                        T::set_rxdone_irq(true);
+                        unsafe { T::irq().enable() };
+                        return Poll::Pending;
+                    }
+                    T::clear_rxdone();
+                    let slot = match &mut operations[op_idx] {
+                        Operation::Read(buf) => &mut buf[byte_idx - 1],
+                        _ => unreachable!(),
+                    };
+                    *slot = T::rx_byte();
+                    step = dispatch::<T>(
+                        operations,
+                        op_idx,
+                        &mut byte_idx,
+                        op_idx + 1 == operations.len(),
+                    );
+                }
+                Step::Next => {
+                    op_idx += 1;
+                    byte_idx = 0;
+                    step = Step::Init;
                 }
                 Step::Done => {
+                    T::stop();
+                    // STOP is short (a few SCL periods); keep the executor
+                    // blocked only until the bus is idle again.
+                    let mut timeout = 1_000_000u32;
+                    while !T::bus_free() && timeout > 0 {
+                        timeout -= 1;
+                        core::hint::spin_loop();
+                    }
                     T::disable_all_irqs();
                     return Poll::Ready(Ok(()));
                 }
@@ -192,6 +150,38 @@ pub(crate) async fn master<T: Instance>(
         }
     })
     .await
+}
+
+/// Load the next byte of the current operation, or move the state machine to
+/// the next operation / STOP. Called once an address or data byte completed.
+fn dispatch<T: Instance>(
+    operations: &mut [Operation<'_>],
+    op_idx: usize,
+    byte_idx: &mut usize,
+    last_op: bool,
+) -> Step {
+    let is_write = matches!(operations[op_idx], Operation::Write(_));
+    let len = op_len(operations, op_idx);
+    if *byte_idx < len {
+        if is_write {
+            let byte = read_byte(operations, op_idx, *byte_idx);
+            *byte_idx += 1;
+            T::txdata(byte);
+            T::request_write();
+            Step::WData
+        } else {
+            // NACK the last byte of a read phase so a repeated START can
+            // follow; ACK all earlier bytes.
+            let nack = *byte_idx + 1 == len;
+            *byte_idx += 1;
+            T::request_read(nack);
+            Step::RData
+        }
+    } else if last_op {
+        Step::Done
+    } else {
+        Step::Next
+    }
 }
 
 /// Encoded address byte (R/W bit cleared for a write, set for a read).

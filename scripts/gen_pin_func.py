@@ -120,8 +120,11 @@ BANNERS = {
 //!
 //! Each `Pin{n}Func` enumerates the I2C functions selectable on pin `{n}` of its
 //! bank; the numeric value of every variant is the 4-bit code written into
-//! `PORTx.FUNC0/FUNC1`. Code `0` (generic GPIO) is omitted. The variants are the
-//! type-checked argument to [`crate::i2c::I2c::new`].
+//! `PORTx.FUNC0/FUNC1`. Code `0` (generic GPIO) is omitted. The `I2Cx_SCL` /
+//! `I2Cx_SDA` variants additionally back the [`crate::i2c::I2cSclPin`] /
+//! [`crate::i2c::I2cSdaPin`] traits, so [`crate::i2c::I2c::new`] can derive the
+//! `PORTx.FUNC` code from the pin type and the I2C instance without the caller
+//! spelling it out.
 
 """,
     "timr": """//! TIMR pad functions of the SWM341 pin matrix.
@@ -248,6 +251,30 @@ BANNERS = {
 }
 
 
+# Extra macro emitted only for I2C: it turns every `I2Cx_SCL` / `I2Cx_SDA`
+# variant into an `I2cSclPin<T>` / `I2cSdaPin<T>` impl, mirroring the UART
+# role traits so `I2c::new` can derive the pad function from the pin type.
+I2C_ROLE_MACRO = """/// Back an `I2Cx_SCL` / `I2Cx_SDA` pin variant with a
+/// [`crate::i2c::I2cSclPin`] / [`crate::i2c::I2cSdaPin`] impl for the matching
+/// I2C instance. Any other variant (there are none today) is ignored.
+macro_rules! i2c_role_impls {
+    (@role $pin:ident, I2c0Scl, $val:literal) => {
+        impl crate::i2c::I2cSclPin<crate::I2c0> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, I2c0Sda, $val:literal) => {
+        impl crate::i2c::I2cSdaPin<crate::I2c0> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, I2c1Scl, $val:literal) => {
+        impl crate::i2c::I2cSclPin<crate::I2c1> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, I2c1Sda, $val:literal) => {
+        impl crate::i2c::I2cSdaPin<crate::I2c1> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, $_var:ident, $val:literal) => {};
+}
+"""
+
+
 def camel(symbol):
     """`HALL3_IN2` -> `Hall3In2`, keeping digit groups glued to their part."""
     return "".join(part[0].upper() + part[1:].lower() for part in symbol.split("_") if part)
@@ -289,34 +316,71 @@ def emit_peripheral(periph, table, out_path):
         if matches:
             by_port.setdefault(port, {})[pin] = sorted(matches, key=lambda v: v[0])
 
+    role_lines = (
+        [
+            "",
+            "            $(",
+            "                i2c_role_impls!(@role $pin_ty, $var, $val);",
+            "            )*",
+        ]
+        if periph == "i2c"
+        else []
+    )
+
+    # I2C (like the UART table) keeps the FUNC code as the enum discriminant, so
+    # `PinXFunc::I2c0Scl as u8` stays meaningful. Tables with several aliases
+    # sharing one code (LCD) need the `match` form instead.
+    enum_variant_line = (
+        "                $( $var = $val ),*"
+        if periph == "i2c"
+        else "                $( $var, )*"
+    )
+    value_impl_lines = (
+        ["                fn value(self) -> u8 { self as u8 }"]
+        if periph == "i2c"
+        else [
+            "                fn value(self) -> u8 {",
+            "                    match self {",
+            "                        $( $enum::$var => $val, )*",
+            "                    }",
+            "                }",
+        ]
+    )
+    alias_note_lines = (
+        []
+        if periph == "i2c"
+        else [
+            "/// The codes go into the `PinFunc::value` match instead of enum",
+            "/// discriminants: one pad often carries several names for the same line",
+            "/// (`LCD_CS` and `LCD_VSYNC` on PB2 are both code `6`), and two variants",
+            "/// with the same discriminant do not compile.",
+        ]
+    )
+
     lines = [BANNERS[periph]]
+    if periph == "i2c":
+        lines.append(I2C_ROLE_MACRO)
     lines.extend(
         [
             "/// Generate the per-pin `Pin{n}Func` enums for one bank module.",
             "///",
             "/// Each entry is `PinType => Enum { Variant = func_code, ... }`; the macro",
             "/// writes the `#[repr(u8)]` enum plus its `PinFunc` / `PinFuncOf` impls.",
-            "/// The codes go into the `PinFunc::value` match instead of enum",
-            "/// discriminants: one pad often carries several names for the same line",
-            "/// (`LCD_CS` and `LCD_VSYNC` on PB2 are both code `6`), and two variants",
-            "/// with the same discriminant do not compile.",
+            *alias_note_lines,
             "macro_rules! pad_funcs {",
             "    ( $( $pin_ty:ident => $enum:ident { $( $var:ident = $val:literal ),* $(,)? } ),* $(,)? ) => {",
             "        $(",
             "            #[derive(Clone, Copy, PartialEq, Eq, Debug)]",
             "            #[repr(u8)]",
             "            pub enum $enum {",
-            "                $( $var, )*",
+            enum_variant_line,
             "            }",
             "            impl crate::gpio::PinFunc for $enum {",
             "                #[inline]",
-            "                fn value(self) -> u8 {",
-            "                    match self {",
-            "                        $( $enum::$var => $val, )*",
-            "                    }",
-            "                }",
+            *value_impl_lines,
             "            }",
             "            impl crate::gpio::PinFuncOf<crate::gpio::$pin_ty> for $enum {}",
+            *role_lines,
             "        )*",
             "    };",
             "}",

@@ -5,9 +5,31 @@
 //!
 //! Each `Pin{n}Func` enumerates the I2C functions selectable on pin `{n}` of its
 //! bank; the numeric value of every variant is the 4-bit code written into
-//! `PORTx.FUNC0/FUNC1`. Code `0` (generic GPIO) is omitted. The variants are the
-//! type-checked argument to [`crate::i2c::I2c::new`].
+//! `PORTx.FUNC0/FUNC1`. Code `0` (generic GPIO) is omitted. The `I2Cx_SCL` /
+//! `I2Cx_SDA` variants additionally back the [`crate::i2c::I2cSclPin`] /
+//! [`crate::i2c::I2cSdaPin`] traits, so [`crate::i2c::I2c::new`] can derive the
+//! `PORTx.FUNC` code from the pin type and the I2C instance without the caller
+//! spelling it out.
 
+
+/// Back an `I2Cx_SCL` / `I2Cx_SDA` pin variant with a
+/// [`crate::i2c::I2cSclPin`] / [`crate::i2c::I2cSdaPin`] impl for the matching
+/// I2C instance. Any other variant (there are none today) is ignored.
+macro_rules! i2c_role_impls {
+    (@role $pin:ident, I2c0Scl, $val:literal) => {
+        impl crate::i2c::I2cSclPin<crate::I2c0> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, I2c0Sda, $val:literal) => {
+        impl crate::i2c::I2cSdaPin<crate::I2c0> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, I2c1Scl, $val:literal) => {
+        impl crate::i2c::I2cSclPin<crate::I2c1> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, I2c1Sda, $val:literal) => {
+        impl crate::i2c::I2cSdaPin<crate::I2c1> for crate::gpio::$pin { const FUNC: u8 = $val; }
+    };
+    (@role $pin:ident, $_var:ident, $val:literal) => {};
+}
 
 /// Generate the per-pin `Pin{n}Func` enums for one bank module.
 ///
@@ -26,6 +48,10 @@ macro_rules! pad_funcs {
                 fn value(self) -> u8 { self as u8 }
             }
             impl crate::gpio::PinFuncOf<crate::gpio::$pin_ty> for $enum {}
+
+            $(
+                i2c_role_impls!(@role $pin_ty, $var, $val);
+            )*
         )*
     };
 }

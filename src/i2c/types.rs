@@ -5,8 +5,10 @@
 pub enum Error {
     /// Another master won the bus (or the peripheral lost arbitration).
     ArbitrationLost,
-    /// The bus stayed busy past the internal timeout (no pull-up, stuck line, or
-    /// an unacknowledged address / data byte).
+    /// The slave did not acknowledge an address or data byte.
+    NoAcknowledge,
+    /// The bus stayed busy past the internal timeout (no pull-up, stuck line,
+    /// or an SCL-low timeout).
     Timeout,
     /// Received data was not read before the next byte arrived.
     Overrun,
@@ -16,7 +18,7 @@ impl embedded_hal::i2c::Error for Error {
     fn kind(&self) -> embedded_hal::i2c::ErrorKind {
         match self {
             Error::ArbitrationLost => embedded_hal::i2c::ErrorKind::ArbitrationLoss,
-            Error::Timeout => embedded_hal::i2c::ErrorKind::NoAcknowledge(
+            Error::NoAcknowledge | Error::Timeout => embedded_hal::i2c::ErrorKind::NoAcknowledge(
                 embedded_hal::i2c::NoAcknowledgeSource::Unknown,
             ),
             Error::Overrun => embedded_hal::i2c::ErrorKind::Overrun,

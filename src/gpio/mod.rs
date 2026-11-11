@@ -242,6 +242,16 @@ fn set_output_options<P: Pin>(output_type: OutputType, speed: Speed) {
     <P as sealed::Pin>::Port::set_output_options(P::number(), output_type, speed);
 }
 
+/// Configure a pad as an I2C line: open drain with the internal pull-up and
+/// the input buffer on. The datasheet's master/slave init flows require PULLU
+/// + INEN on SCL and SDA, and the vendor CSL also enables OPEND so the pad
+/// only pulls the bus low. `set_pull` turns INEN on as a side effect.
+#[inline(always)]
+pub(crate) fn set_i2c_pad<P: Pin>() {
+    set_pull::<P>(Pull::Up);
+    set_output_options::<P>(OutputType::OpenDrain, Speed::Normal);
+}
+
 #[inline(always)]
 fn write_level<P: Pin>(level: Level) {
     <P as sealed::Pin>::Port::set_level(P::number(), level);

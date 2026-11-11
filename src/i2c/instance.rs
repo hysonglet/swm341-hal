@@ -45,6 +45,12 @@ pub(crate) mod sealed {
         #[inline(always)]
         fn enable_master() {
             let regs = unsafe { &*Self::regs() };
+            // Configure while the block is off, like the CSL's I2C_Init +
+            // I2C_Open. IF is W1C, so writing all ones clears stale flags
+            // (TXE resets to 1, which would otherwise fake a completed byte).
+            regs.cr.write(|w| w.en().clear_bit());
+            regs.ie.write(|w| unsafe { w.bits(0) });
+            regs.if_.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
             regs.cr.write(|w| w.en().set_bit().master().set_bit());
         }
 
@@ -84,13 +90,33 @@ pub(crate) mod sealed {
         #[inline(always)]
         fn start() {
             let regs = unsafe { &*Self::regs() };
-            regs.mcr.write(|w| w.sta().set_bit());
+            // STA + WR together: the hardware emits START first and then
+            // transmits the address byte already loaded into TXDATA. A bare
+            // STA only generates START and leaves the address unsent. The same
+            // command produces a repeated START in the middle of a transfer.
+            regs.mcr.write(|w| w.sta().set_bit().wr().set_bit());
         }
 
         #[inline(always)]
         fn stop() {
             let regs = unsafe { &*Self::regs() };
             regs.mcr.write(|w| w.sto().set_bit());
+        }
+
+        /// True once the hardware cleared every MCR command bit, i.e. START,
+        /// byte or STOP finished (including its ACK/NACK slot).
+        #[inline(always)]
+        fn cmd_done() -> bool {
+            let regs = unsafe { &*Self::regs() };
+            let mcr = regs.mcr.read();
+            !(mcr.sta().bit() || mcr.rd().bit() || mcr.wr().bit() || mcr.sto().bit())
+        }
+
+        /// True when the last transmitted byte was ACKed (TR.RXACK == 0).
+        #[inline(always)]
+        fn acked() -> bool {
+            let regs = unsafe { &*Self::regs() };
+            !regs.tr.read().rxack().bit()
         }
 
         #[inline(always)]
@@ -100,15 +126,12 @@ pub(crate) mod sealed {
         }
 
         #[inline(always)]
-        fn request_read(last: bool) {
+        fn request_read(nack: bool) {
             let regs = unsafe { &*Self::regs() };
-            regs.mcr.write(|w| {
-                w.rd().set_bit();
-                if last {
-                    w.sto().set_bit();
-                }
-                w
-            });
+            // As receiver the master NACKs the last byte (TR.TXACK = 1);
+            // STOP is generated separately once the transfer is complete.
+            regs.tr.write(|w| w.txack().bit(nack));
+            regs.mcr.write(|w| w.rd().set_bit());
         }
 
         #[inline(always)]
@@ -216,6 +239,13 @@ pub(crate) mod sealed {
         fn disable_all_irqs() {
             let regs = unsafe { &*Self::regs() };
             regs.ie.write(|w| w);
+        }
+
+        /// Clear every interrupt flag (IF is write-one-to-clear).
+        #[inline(always)]
+        fn clear_flags() {
+            let regs = unsafe { &*Self::regs() };
+            regs.if_.write(|w| unsafe { w.bits(0xFFFF_FFFF) });
         }
 
         // -- I2C slave (peripheral) mode --

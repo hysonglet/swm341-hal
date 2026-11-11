@@ -18,12 +18,12 @@
 
 use embassy_hal_internal::{into_ref, Peripheral, PeripheralRef};
 
-use crate::gpio::{Pin, PinFuncOf};
+use crate::gpio::Pin;
 use crate::mode::{Blocking, Mode};
 
 use super::instance::Instance;
-use super::Error;
 use super::types::SlaveConfig;
+use super::{Error, I2cSclPin, I2cSdaPin};
 
 #[cfg(feature = "embassy")]
 use crate::mode::Async;
@@ -40,25 +40,29 @@ pub struct I2cSlave<'d, T: Instance, Scl: Pin, Sda: Pin, M: Mode = Blocking> {
 impl<'d, T: Instance, Scl: Pin, Sda: Pin, M: Mode> I2cSlave<'d, T, Scl, Sda, M> {
     /// Build an I2C slave from its peripheral and the two pads.
     ///
-    /// Each `x_func` picks the alternate function of its pad; only the
-    /// [`crate::gpio::PinFuncOf`] value that belongs to that exact pad type checks,
-    /// so a wrong pad is a compile error. This is the shared constructor used by
-    /// [`I2cSlave::new`] and [`I2cSlave::new_async`].
+    /// The SCL/SDA `PORTx.FUNC` codes are derived from `scl`/`sda` and the I2C
+    /// instance `T` via [`I2cSclPin`]/[`I2cSdaPin`]; a pad that cannot serve the
+    /// requested role is a compile error. This is the shared constructor used
+    /// by [`I2cSlave::new`] and [`I2cSlave::new_async`].
     pub(crate) fn build(
         peri: impl Peripheral<P = T> + 'd,
         scl: impl Peripheral<P = Scl> + 'd,
-        scl_func: impl PinFuncOf<Scl>,
         sda: impl Peripheral<P = Sda> + 'd,
-        sda_func: impl PinFuncOf<Sda>,
         config: SlaveConfig,
-    ) -> Self {
+    ) -> Self
+    where
+        Scl: I2cSclPin<T>,
+        Sda: I2cSdaPin<T>,
+    {
         into_ref!(peri, scl, sda);
 
         T::clock().open();
         crate::gpio::acquire::<Scl>();
         crate::gpio::acquire::<Sda>();
-        crate::gpio::set_function::<Scl>(scl_func.value());
-        crate::gpio::set_function::<Sda>(sda_func.value());
+        crate::gpio::set_function::<Scl>(<Scl as I2cSclPin<T>>::FUNC);
+        crate::gpio::set_function::<Sda>(<Sda as I2cSdaPin<T>>::FUNC);
+        crate::gpio::set_i2c_pad::<Scl>();
+        crate::gpio::set_i2c_pad::<Sda>();
 
         T::enter_slave();
         T::set_slave_address(config.address, config.address_mask);
@@ -78,12 +82,14 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2cSlave<'d, T, Scl, Sda, Blocking> {
     pub fn new(
         peri: impl Peripheral<P = T> + 'd,
         scl: impl Peripheral<P = Scl> + 'd,
-        scl_func: impl PinFuncOf<Scl>,
         sda: impl Peripheral<P = Sda> + 'd,
-        sda_func: impl PinFuncOf<Sda>,
         config: SlaveConfig,
-    ) -> Self {
-        Self::build(peri, scl, scl_func, sda, sda_func, config)
+    ) -> Self
+    where
+        Scl: I2cSclPin<T>,
+        Sda: I2cSdaPin<T>,
+    {
+        Self::build(peri, scl, sda, config)
     }
 }
 
@@ -93,12 +99,14 @@ impl<'d, T: Instance, Scl: Pin, Sda: Pin> I2cSlave<'d, T, Scl, Sda, Async> {
     pub fn new_async(
         peri: impl Peripheral<P = T> + 'd,
         scl: impl Peripheral<P = Scl> + 'd,
-        scl_func: impl PinFuncOf<Scl>,
         sda: impl Peripheral<P = Sda> + 'd,
-        sda_func: impl PinFuncOf<Sda>,
         config: SlaveConfig,
-    ) -> Self {
-        Self::build(peri, scl, scl_func, sda, sda_func, config)
+    ) -> Self
+    where
+        Scl: I2cSclPin<T>,
+        Sda: I2cSdaPin<T>,
+    {
+        Self::build(peri, scl, sda, config)
     }
 }
 
