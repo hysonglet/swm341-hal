@@ -3,16 +3,17 @@ name = "swm341-hal"
 version = "0.1.0"
 edition = "2021"
 description = "HAL for Synwit SWM341 microcontrollers (Arm China STAR-MC1 / Armv8-M Mainline)"
+repository = "https://github.com/hysonglet/swm341-hal"
 keywords = ["no-std", "embedded", "swm", "synwit", "hal"]
 categories = ["embedded", "no-std", "hardware-support"]
-license = "0BSD"
+license = "Apache-2.0"
 
 [dependencies]
-swm341-pac = { git = "https://github.com/hysonglet/swm-pacs.git" }
+swm341-pac = "0.2.0"
 
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 # `device` makes cortex-m-rt pull in this crate's `device.x`, which carries the
-# 89 vectors the PAC's SVD is missing. The PAC's own `rt` feature is left off on
+# 91 vectors the PAC's SVD is missing. The PAC's own `rt` feature is left off on
 # purpose: it would inject a second, shorter `__INTERRUPTS` table.
 cortex-m-rt = { version = "0.7.3", features = ["device"] }
 critical-section = "1.1"
