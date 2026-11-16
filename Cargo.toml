@@ -7,6 +7,7 @@ repository = "https://github.com/hysonglet/swm341-hal"
 keywords = ["no-std", "embedded", "swm", "synwit", "hal"]
 categories = ["embedded", "no-std", "hardware-support"]
 license = "Apache-2.0"
+exclude = ["doc/*.pdf", "doc/*.txt", ".marscode/"]
 
 [dependencies]
 swm341-pac = "0.2.0"
